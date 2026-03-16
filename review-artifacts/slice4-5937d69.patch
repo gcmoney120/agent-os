@@ -1,0 +1,873 @@
+From 5937d69c2968164a62a1474a5ab9d0de5c9dfa0e Mon Sep 17 00:00:00 2001
+From: gcmoney120 <gcmoney120@gmail.com>
+Date: Fri, 27 Feb 2026 19:18:03 +1300
+Subject: [PATCH] =?UTF-8?q?feat(agent-os):=20Slice=204=20=E2=80=94=20Gover?=
+ =?UTF-8?q?nance=20Enforcement=20Layer?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Adds deterministic governance decision to dispatchRun():
+
+Pre-run gate (before any step):
+- Validates adapter.governance.system_state_updates.mode === "hybrid"
+- Validates require_manual_approval_for includes "trust_change"
+- Validates auto_apply_for includes "trivial"
+- Fails with ADAPTER_GOVERNANCE_MISCONFIGURED (no steps execute)
+
+Per-step governance (ordering locked per §8):
+- §8.8: TRUST_CHANGE_MISSING_NOTES before writeStepReport
+- §8.9: STEP_REPORT_INVALID defensive assert for unknown state_impact
+- §8.12-13: governanceDecision() evaluated after writeStepReport;
+  require_manual_approval halts with DISPATCH_HALTED_GOVERNANCE
+
+New exports: governanceDecision() (pure function, no side effects)
+New error codes: ADAPTER_GOVERNANCE_MISCONFIGURED, STEP_REPORT_INVALID,
+  TRUST_CHANGE_MISSING_NOTES, DISPATCH_HALTED_GOVERNANCE
+
+Tests: 47 pass (21 Slice 1/2 + 11 Slice 3 + 15 Slice 4), 0 fail.
+No StepReport schema changes. No adapter schema changes. No run states.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+---
+ .../dispatcher/__tests__/dispatchRun.test.ts  | 421 +++++++++++++++++-
+ agent-os/src/dispatcher/dispatchRun.ts        | 234 +++++++++-
+ agent-os/src/dispatcher/errors.ts             |  14 +-
+ 3 files changed, 645 insertions(+), 24 deletions(-)
+
+diff --git a/agent-os/src/dispatcher/__tests__/dispatchRun.test.ts b/agent-os/src/dispatcher/__tests__/dispatchRun.test.ts
+index 5be60f5..5dd64c8 100644
+--- a/agent-os/src/dispatcher/__tests__/dispatchRun.test.ts
++++ b/agent-os/src/dispatcher/__tests__/dispatchRun.test.ts
+@@ -1,13 +1,14 @@
+ /**
+- * Agent OS v1.0 — Dispatcher Tests (Slice 3).
++ * Agent OS v1.0 — Dispatcher Tests (Slices 3 + 4).
+  *
+- * Acceptance checks AC1–AC9 for dispatchRun().
++ * Slice 3 acceptance checks: AC1–AC11.
++ * Slice 4 acceptance checks: S4-AC1–S4-AC15 (Governance Enforcement).
+  * Uses Node.js native test runner. No real filesystem.
+  */
+ 
+ import { describe, it } from "node:test";
+ import assert from "node:assert/strict";
+-import { dispatchRun } from "../dispatchRun.js";
++import { dispatchRun, governanceDecision } from "../dispatchRun.js";
+ import type {
+   DispatchRequestV1,
+   DispatchDeps,
+@@ -81,12 +82,30 @@ function validRequest(overrides: Partial<DispatchRequestV1> = {}): DispatchReque
+   };
+ }
+ 
++/**
++ * A governance-valid adapter object (passes the Slice 4 pre-run gate).
++ * Tests that need to exercise gate failures override loadProjectAdapter directly.
++ */
++function validAdapter(govOverrides: Record<string, unknown> = {}): unknown {
++  return {
++    name: "test-adapter",
++    governance: {
++      system_state_updates: {
++        mode: "hybrid",
++        require_manual_approval_for: ["trust_change"],
++        auto_apply_for: ["trivial"],
++        ...govOverrides,
++      },
++    },
++  };
++}
++
+ /** Build deps with sensible defaults and overrides. */
+ function stubDeps(overrides: Partial<DispatchDeps> = {}): DispatchDeps {
+   return {
+     loadProjectAdapter: async () => ({
+       ok: true as const,
+-      adapter: { name: "test-adapter" },
++      adapter: validAdapter(),
+     }),
+     validateStepReport: () => ({ ok: true as const }),
+     writeStepReport: async ({ artifacts_root, step_index, step_id }) => ({
+@@ -444,4 +463,398 @@ describe("dispatchRun", () => {
+       assert.match(result.error.message, /unsafe for filesystem path/);
+     }
+   });
++
++  // ════════════════════════════════════════════════════════════════════════════
++  // Slice 4 — Governance Enforcement (S4-AC1 through S4-AC15)
++  // ════════════════════════════════════════════════════════════════════════════
++
++  describe("Slice 4 — Governance Enforcement", () => {
++
++    // ── S4-AC1: Pre-run gate: mode violation ────────────────────────────────
++
++    it("S4-AC1 — mode !== 'hybrid' => ADAPTER_GOVERNANCE_MISCONFIGURED, no steps", async () => {
++      let runnerCalled = false;
++      const deps = stubDeps({
++        loadProjectAdapter: async () => ({
++          ok: true as const,
++          adapter: validAdapter({ mode: "not-hybrid" }),
++        }),
++        runnerRegistry: fullRegistry({
++          forge: fnRunner(async () => {
++            runnerCalled = true;
++            return { step_report: validStepReport() };
++          }),
++        }),
++      });
++
++      const result = await dispatchRun(validRequest(), deps);
++
++      assert.equal(result.ok, false);
++      if (!result.ok) {
++        assert.equal(result.error.code, "ADAPTER_GOVERNANCE_MISCONFIGURED");
++        assert.match(result.error.message, /mode/);
++        assert.deepEqual(result.written_step_reports, []);
++      }
++      assert.equal(runnerCalled, false, "runner must not be called on gate failure");
++    });
++
++    // ── S4-AC2: Pre-run gate: missing trust_change ──────────────────────────
++
++    it("S4-AC2 — require_manual_approval_for omits 'trust_change' => ADAPTER_GOVERNANCE_MISCONFIGURED", async () => {
++      const deps = stubDeps({
++        loadProjectAdapter: async () => ({
++          ok: true as const,
++          adapter: validAdapter({ require_manual_approval_for: ["other"] }),
++        }),
++      });
++
++      const result = await dispatchRun(validRequest(), deps);
++
++      assert.equal(result.ok, false);
++      if (!result.ok) {
++        assert.equal(result.error.code, "ADAPTER_GOVERNANCE_MISCONFIGURED");
++        assert.match(result.error.message, /trust_change/);
++        assert.deepEqual(result.written_step_reports, []);
++      }
++    });
++
++    // ── S4-AC3: Pre-run gate: missing trivial ───────────────────────────────
++
++    it("S4-AC3 — auto_apply_for omits 'trivial' => ADAPTER_GOVERNANCE_MISCONFIGURED", async () => {
++      const deps = stubDeps({
++        loadProjectAdapter: async () => ({
++          ok: true as const,
++          adapter: validAdapter({ auto_apply_for: ["other"] }),
++        }),
++      });
++
++      const result = await dispatchRun(validRequest(), deps);
++
++      assert.equal(result.ok, false);
++      if (!result.ok) {
++        assert.equal(result.error.code, "ADAPTER_GOVERNANCE_MISCONFIGURED");
++        assert.match(result.error.message, /trivial/);
++        assert.deepEqual(result.written_step_reports, []);
++      }
++    });
++
++    // ── S4-AC4: auto_apply for none ─────────────────────────────────────────
++
++    it("S4-AC4 — state_impact 'none' => auto_apply, result ok: true", async () => {
++      const deps = stubDeps({
++        runnerRegistry: fullRegistry({
++          forge: stubRunner({ step_report: validStepReport({ state_impact: "none" }) }),
++        }),
++      });
++
++      const result = await dispatchRun(validRequest(), deps);
++
++      assert.equal(result.ok, true);
++    });
++
++    // ── S4-AC5: auto_apply for trivial in auto_apply_for ────────────────────
++
++    it("S4-AC5 — state_impact 'trivial' + trivial in auto_apply_for => auto_apply, result ok: true", async () => {
++      // Default validAdapter has auto_apply_for: ["trivial"]
++      const deps = stubDeps({
++        runnerRegistry: fullRegistry({
++          forge: stubRunner({ step_report: validStepReport({ state_impact: "trivial" }) }),
++        }),
++      });
++
++      const result = await dispatchRun(validRequest(), deps);
++
++      assert.equal(result.ok, true);
++    });
++
++    // ── S4-AC6: governanceDecision — trivial not in auto_apply_for ──────────
++    //
++    // NOTE: The pre-run gate mandates auto_apply_for includes "trivial", so
++    // "trivial ∉ auto_apply_for" is unreachable via dispatchRun() in production.
++    // The rule is tested directly against the exported pure function, which is
++    // the correct coverage point for this branch.
++
++    it("S4-AC6 — governanceDecision: 'trivial' ∉ auto_apply_for => require_manual_approval", () => {
++      const decision = governanceDecision("trivial", undefined, ["other_thing"], ["trust_change"]);
++      assert.equal(decision, "require_manual_approval");
++    });
++
++    // ── S4-AC7: trust_change always halts even if in auto_apply_for ─────────
++
++    it("S4-AC7 — state_impact 'trust_change' with adversarial auto_apply_for => DISPATCH_HALTED_GOVERNANCE", async () => {
++      // Adversarial adapter: auto_apply_for includes "trust_change" — must be ignored.
++      // Still requires trivial to pass gate.
++      const deps = stubDeps({
++        loadProjectAdapter: async () => ({
++          ok: true as const,
++          adapter: validAdapter({ auto_apply_for: ["trivial", "trust_change"] }),
++        }),
++        runnerRegistry: fullRegistry({
++          forge: stubRunner({
++            step_report: validStepReport({
++              state_impact: "trust_change",
++              trust_notes: "reason for trust change",
++            }),
++          }),
++        }),
++      });
++
++      const result = await dispatchRun(validRequest(), deps);
++
++      assert.equal(result.ok, false);
++      if (!result.ok) {
++        assert.equal(result.error.code, "DISPATCH_HALTED_GOVERNANCE");
++        const cause = result.error.cause as Record<string, unknown>;
++        assert.equal(cause.state_impact, "trust_change");
++        assert.equal(cause.decision, "require_manual_approval");
++      }
++    });
++
++    // ── S4-AC8: phase_boundary not in auto_apply_for ────────────────────────
++
++    it("S4-AC8 — state_impact 'phase_boundary', not in auto_apply_for => DISPATCH_HALTED_GOVERNANCE", async () => {
++      // Default validAdapter has auto_apply_for: ["trivial"] — no phase_boundary.
++      const deps = stubDeps({
++        runnerRegistry: fullRegistry({
++          forge: stubRunner({
++            step_report: validStepReport({ state_impact: "phase_boundary" }),
++          }),
++        }),
++      });
++
++      const result = await dispatchRun(validRequest(), deps);
++
++      assert.equal(result.ok, false);
++      if (!result.ok) {
++        assert.equal(result.error.code, "DISPATCH_HALTED_GOVERNANCE");
++        const cause = result.error.cause as Record<string, unknown>;
++        assert.equal(cause.state_impact, "phase_boundary");
++      }
++    });
++
++    // ── S4-AC9: phase_boundary explicitly in auto_apply_for ─────────────────
++
++    it("S4-AC9 — state_impact 'phase_boundary', explicitly in auto_apply_for => auto_apply, result ok: true", async () => {
++      const deps = stubDeps({
++        loadProjectAdapter: async () => ({
++          ok: true as const,
++          adapter: validAdapter({ auto_apply_for: ["trivial", "phase_boundary"] }),
++        }),
++        runnerRegistry: fullRegistry({
++          forge: stubRunner({
++            step_report: validStepReport({ state_impact: "phase_boundary" }),
++          }),
++        }),
++      });
++
++      const result = await dispatchRun(validRequest(), deps);
++
++      assert.equal(result.ok, true);
++    });
++
++    // ── S4-AC10: TRUST_CHANGE_MISSING_NOTES when trust_notes absent ─────────
++
++    it("S4-AC10 — trust_change + trust_notes undefined => TRUST_CHANGE_MISSING_NOTES; writeStepReport not called", async () => {
++      let writeStepCalled = false;
++      const deps = stubDeps({
++        runnerRegistry: fullRegistry({
++          forge: stubRunner({
++            // trust_notes intentionally absent
++            step_report: validStepReport({ state_impact: "trust_change" }),
++          }),
++        }),
++        writeStepReport: async ({ artifacts_root, step_index, step_id }) => {
++          writeStepCalled = true;
++          return {
++            ok: true as const,
++            path: `${artifacts_root}/steps/${step_index}-${step_id}/step-report.json`,
++          };
++        },
++      });
++
++      const result = await dispatchRun(validRequest(), deps);
++
++      assert.equal(result.ok, false);
++      if (!result.ok) {
++        assert.equal(result.error.code, "TRUST_CHANGE_MISSING_NOTES");
++        assert.equal(result.error.step_index, 0);
++      }
++      assert.equal(writeStepCalled, false, "writeStepReport must not be called when trust_notes check fails");
++    });
++
++    // ── S4-AC11: TRUST_CHANGE_MISSING_NOTES when trust_notes is whitespace ──
++
++    it("S4-AC11 — trust_change + trust_notes whitespace-only => TRUST_CHANGE_MISSING_NOTES; writeStepReport not called", async () => {
++      let writeStepCalled = false;
++      const deps = stubDeps({
++        runnerRegistry: fullRegistry({
++          forge: stubRunner({
++            step_report: validStepReport({
++              state_impact: "trust_change",
++              trust_notes: "   ",
++            }),
++          }),
++        }),
++        writeStepReport: async ({ artifacts_root, step_index, step_id }) => {
++          writeStepCalled = true;
++          return {
++            ok: true as const,
++            path: `${artifacts_root}/steps/${step_index}-${step_id}/step-report.json`,
++          };
++        },
++      });
++
++      const result = await dispatchRun(validRequest(), deps);
++
++      assert.equal(result.ok, false);
++      if (!result.ok) {
++        assert.equal(result.error.code, "TRUST_CHANGE_MISSING_NOTES");
++      }
++      assert.equal(writeStepCalled, false, "writeStepReport must not be called when trust_notes check fails");
++    });
++
++    // ── S4-AC12: Fail-fast after governance halt ────────────────────────────
++
++    it("S4-AC12 — step 0 halts (trust_change) => step 1 runner never called; written_step_reports has step 0 only", async () => {
++      let step1Called = false;
++
++      const req = validRequest({
++        steps: [
++          {
++            step_index: 0,
++            step_id: "step-a",
++            actor: "forge",
++            action: "forge.implement",
++            capabilities: [],
++          },
++          {
++            step_index: 1,
++            step_id: "step-b",
++            actor: "atlas",
++            action: "atlas.research",
++            capabilities: [],
++          },
++        ],
++      });
++
++      const deps = stubDeps({
++        runnerRegistry: fullRegistry({
++          forge: stubRunner({
++            step_report: validStepReport({
++              state_impact: "trust_change",
++              trust_notes: "this changes trust",
++            }),
++          }),
++          atlas: fnRunner(async () => {
++            step1Called = true;
++            return { step_report: validStepReport() };
++          }),
++        }),
++      });
++
++      const result = await dispatchRun(req, deps);
++
++      assert.equal(result.ok, false);
++      if (!result.ok) {
++        assert.equal(result.error.code, "DISPATCH_HALTED_GOVERNANCE");
++        assert.equal(result.error.step_index, 0);
++        assert.equal(result.written_step_reports?.length, 1);
++        assert.equal(result.written_step_reports?.[0].step_id, "step-a");
++      }
++      assert.equal(step1Called, false, "step 1 runner must not be called after governance halt");
++    });
++
++    // ── S4-AC13: DISPATCH_HALTED_GOVERNANCE result shape ───────────────────
++
++    it("S4-AC13 — DISPATCH_HALTED_GOVERNANCE result includes required fields", async () => {
++      const deps = stubDeps({
++        runnerRegistry: fullRegistry({
++          forge: stubRunner({
++            step_report: validStepReport({
++              state_impact: "trust_change",
++              trust_notes: "reason",
++            }),
++          }),
++        }),
++      });
++
++      const result = await dispatchRun(validRequest(), deps);
++
++      assert.equal(result.ok, false);
++      if (!result.ok) {
++        assert.equal(result.error.code, "DISPATCH_HALTED_GOVERNANCE");
++        assert.equal(result.error.step_index, 0);
++        assert.equal(result.error.step_id, "step-a");
++        assert.equal(result.error.actor, "forge");
++        const cause = result.error.cause as Record<string, unknown>;
++        assert.equal(cause.state_impact, "trust_change");
++        assert.equal(cause.decision, "require_manual_approval");
++        // Halting step included in written_step_reports
++        assert.equal(result.written_step_reports?.length, 1);
++        assert.equal(result.written_step_reports?.[0].step_id, "step-a");
++      }
++    });
++
++    // ── S4-AC14: writeStepReport called before governance decision ──────────
++
++    it("S4-AC14 — writeStepReport spy called once for halting step before halt returned", async () => {
++      let writeCallCount = 0;
++
++      const deps = stubDeps({
++        runnerRegistry: fullRegistry({
++          forge: stubRunner({
++            step_report: validStepReport({
++              state_impact: "trust_change",
++              trust_notes: "reason",
++            }),
++          }),
++        }),
++        writeStepReport: async ({ artifacts_root, step_index, step_id }) => {
++          writeCallCount += 1;
++          return {
++            ok: true as const,
++            path: `${artifacts_root}/steps/${step_index}-${step_id}/step-report.json`,
++          };
++        },
++      });
++
++      const result = await dispatchRun(validRequest(), deps);
++
++      assert.equal(result.ok, false);
++      if (!result.ok) {
++        assert.equal(result.error.code, "DISPATCH_HALTED_GOVERNANCE");
++      }
++      assert.equal(writeCallCount, 1, "writeStepReport must be called exactly once for the halting step");
++    });
++
++    // ── S4-AC15: Pre-run gate fires before any runner ───────────────────────
++
++    it("S4-AC15 — misconfigured adapter => ADAPTER_GOVERNANCE_MISCONFIGURED; step 0 runner never called", async () => {
++      let runnerCalled = false;
++
++      const deps = stubDeps({
++        loadProjectAdapter: async () => ({
++          ok: true as const,
++          // Missing governance entirely
++          adapter: { name: "bare-adapter" },
++        }),
++        runnerRegistry: fullRegistry({
++          forge: fnRunner(async () => {
++            runnerCalled = true;
++            return { step_report: validStepReport() };
++          }),
++        }),
++      });
++
++      const result = await dispatchRun(validRequest(), deps);
++
++      assert.equal(result.ok, false);
++      if (!result.ok) {
++        assert.equal(result.error.code, "ADAPTER_GOVERNANCE_MISCONFIGURED");
++        assert.deepEqual(result.written_step_reports, []);
++      }
++      assert.equal(runnerCalled, false, "step 0 runner must not be called on gate failure");
++    });
++
++  }); // end Slice 4 — Governance Enforcement
+ });
+diff --git a/agent-os/src/dispatcher/dispatchRun.ts b/agent-os/src/dispatcher/dispatchRun.ts
+index 694cc1d..f82ce86 100644
+--- a/agent-os/src/dispatcher/dispatchRun.ts
++++ b/agent-os/src/dispatcher/dispatchRun.ts
+@@ -1,13 +1,14 @@
+ /**
+- * Agent OS v1.0 — Dispatcher (Slice 3).
++ * Agent OS v1.0 — Dispatcher (Slices 3 + 4).
+  *
+  * dispatchRun() executes an ordered list of steps:
+  *   1. Validates the DispatchRequest.
+  *   2. Loads the project adapter via deps.
+- *   3. Verifies the closed runner registry.
+- *   4. For each step: resolve input, build frozen context, invoke runner,
+- *      enforce StepReport, write artifacts.
+- *   5. Fail-fast on first error.
++ *   3. [Slice 4] Pre-run adapter governance gate.
++ *   4. Verifies the closed runner registry.
++ *   5. For each step: resolve input, build frozen context, invoke runner,
++ *      enforce StepReport, [Slice 4] enforce governance, write artifacts.
++ *   6. Fail-fast on first error.
+  *
+  * All IO goes through deps — dispatchRun is pure.
+  */
+@@ -19,7 +20,7 @@ import type {
+   RunnerRegistry,
+   RunnerOutput,
+ } from "./types.js";
+-import type { DispatchResult, DispatchError } from "./errors.js";
++import type { DispatchResult } from "./errors.js";
+ 
+ // ── Deep-freeze utility ──────────────────────────────────────────────────────
+ 
+@@ -50,6 +51,78 @@ export function isSafeStepId(step_id: string): boolean {
+   return true;
+ }
+ 
++// ── Governance decision function (pure) — Slice 4 ───────────────────────────
++
++/**
++ * Determines whether a step may auto-apply or requires manual approval.
++ *
++ * Preconditions (caller must guarantee):
++ *   - state_impact is one of { "none", "trivial", "trust_change", "phase_boundary" }
++ *   - if state_impact === "trust_change", trust_notes is non-empty (checked before call)
++ *
++ * Pure: no side effects, no external reads. Identical inputs → identical output.
++ */
++export function governanceDecision(
++  state_impact: string,
++  _trust_notes: string | undefined,
++  auto_apply_for: string[],
++  _require_manual_approval_for: string[],
++): "auto_apply" | "require_manual_approval" {
++  switch (state_impact) {
++    case "none":
++      return "auto_apply";
++    case "trivial":
++      return auto_apply_for.includes("trivial") ? "auto_apply" : "require_manual_approval";
++    case "trust_change":
++      // Always require manual approval regardless of auto_apply_for contents.
++      return "require_manual_approval";
++    case "phase_boundary":
++      // Absence of "phase_boundary" in auto_apply_for is not permission.
++      return auto_apply_for.includes("phase_boundary") ? "auto_apply" : "require_manual_approval";
++    default:
++      // Precondition violated — defensive fallback; never reached in normal flow.
++      return "require_manual_approval";
++  }
++}
++
++// ── Adapter governance extractor ─────────────────────────────────────────────
++
++interface AdapterGovernanceFields {
++  mode: unknown;
++  require_manual_approval_for: unknown;
++  auto_apply_for: unknown;
++}
++
++function extractAdapterGovernance(adapter: unknown): AdapterGovernanceFields {
++  const empty: AdapterGovernanceFields = {
++    mode: undefined,
++    require_manual_approval_for: undefined,
++    auto_apply_for: undefined,
++  };
++  if (!adapter || typeof adapter !== "object") return empty;
++  const a = adapter as Record<string, unknown>;
++  const gov = a["governance"];
++  if (!gov || typeof gov !== "object") return empty;
++  const g = gov as Record<string, unknown>;
++  const sus = g["system_state_updates"];
++  if (!sus || typeof sus !== "object") return empty;
++  const s = sus as Record<string, unknown>;
++  return {
++    mode: s["mode"],
++    require_manual_approval_for: s["require_manual_approval_for"],
++    auto_apply_for: s["auto_apply_for"],
++  };
++}
++
++// ── Known state_impact values ─────────────────────────────────────────────────
++
++const KNOWN_STATE_IMPACTS = new Set([
++  "none",
++  "trivial",
++  "trust_change",
++  "phase_boundary",
++]);
++
+ // ── Required runner keys ─────────────────────────────────────────────────────
+ 
+ const RUNNER_KEYS: ReadonlyArray<keyof RunnerRegistry> = [
+@@ -146,6 +219,54 @@ export async function dispatchRun(
+     };
+   }
+ 
++  // ── Slice 4: Pre-run adapter governance gate ───────────────────────────
++  // Must pass before any step executes. Requires adapter to be loaded first.
++  const govFields = extractAdapterGovernance(adapterResult.adapter);
++
++  if (govFields.mode !== "hybrid") {
++    return {
++      ok: false,
++      run_id: req.run_id,
++      error: {
++        code: "ADAPTER_GOVERNANCE_MISCONFIGURED",
++        message: 'adapter.governance.system_state_updates.mode must be "hybrid"',
++      },
++      written_step_reports: [],
++    };
++  }
++  if (
++    !Array.isArray(govFields.require_manual_approval_for) ||
++    !(govFields.require_manual_approval_for as string[]).includes("trust_change")
++  ) {
++    return {
++      ok: false,
++      run_id: req.run_id,
++      error: {
++        code: "ADAPTER_GOVERNANCE_MISCONFIGURED",
++        message: 'adapter.governance.system_state_updates.require_manual_approval_for must include "trust_change"',
++      },
++      written_step_reports: [],
++    };
++  }
++  if (
++    !Array.isArray(govFields.auto_apply_for) ||
++    !(govFields.auto_apply_for as string[]).includes("trivial")
++  ) {
++    return {
++      ok: false,
++      run_id: req.run_id,
++      error: {
++        code: "ADAPTER_GOVERNANCE_MISCONFIGURED",
++        message: 'adapter.governance.system_state_updates.auto_apply_for must include "trivial"',
++      },
++      written_step_reports: [],
++    };
++  }
++
++  // Governance arrays confirmed as string[] after gate.
++  const autoApplyFor = govFields.auto_apply_for as string[];
++  const requireManualApprovalFor = govFields.require_manual_approval_for as string[];
++
+   // ── 4.1.5  Verify runner registry is complete ──────────────────────────
+   for (const key of RUNNER_KEYS) {
+     if (!deps.runnerRegistry[key]) {
+@@ -163,7 +284,7 @@ export async function dispatchRun(
+ 
+   // ── Execute steps (fail-fast) ──────────────────────────────────────────
+   for (const step of req.steps) {
+-    // ── Guard: step_id must be a safe filesystem path segment ──────────
++    // ── §8.2  Guard: step_id must be a safe filesystem path segment ─────
+     if (!isSafeStepId(step.step_id)) {
+       return {
+         ok: false,
+@@ -179,7 +300,7 @@ export async function dispatchRun(
+       };
+     }
+ 
+-    // ── 4.3  Resolve input_ref ─────────────────────────────────────────
++    // ── §8.3  Resolve input_ref ────────────────────────────────────────
+     let input: unknown = undefined;
+     if (step.input_ref) {
+       if (step.input_ref.kind === "inline") {
+@@ -200,14 +321,14 @@ export async function dispatchRun(
+       }
+     }
+ 
+-    // ── 4.2  Artifact paths ────────────────────────────────────────────
++    // ── §8.4  Artifact paths ───────────────────────────────────────────
+     const stepDir = `${req.artifacts_root}/steps/${step.step_index}-${step.step_id}`;
+ 
+     if (deps.ensureDir) {
+       await deps.ensureDir(stepDir);
+     }
+ 
+-    // ── Build context ──────────────────────────────────────────────────
++    // ── §8.4  Build context ────────────────────────────────────────────
+     const ctx: FrozenStepContext = {
+       run_id: req.run_id,
+       step_index: step.step_index,
+@@ -221,15 +342,15 @@ export async function dispatchRun(
+       adapter: adapterResult.adapter,
+     };
+ 
+-    // ── Write dispatch-context.json before freeze ──────────────────────
++    // Write dispatch-context.json before freeze.
+     if (deps.writeJsonFile) {
+       await deps.writeJsonFile(`${stepDir}/dispatch-context.json`, ctx);
+     }
+ 
+-    // ── 4.4  Deep-freeze context ───────────────────────────────────────
++    // ── §8.4  Deep-freeze context ──────────────────────────────────────
+     deepFreeze(ctx);
+ 
+-    // ── 4.5  Invoke runner ─────────────────────────────────────────────
++    // ── §8.5  Invoke runner ────────────────────────────────────────────
+     let output: RunnerOutput;
+     try {
+       output = await deps.runnerRegistry[step.actor].run(ctx);
+@@ -249,7 +370,7 @@ export async function dispatchRun(
+       };
+     }
+ 
+-    // ── 4.5.4  step_report must be present ─────────────────────────────
++    // ── §8.6  step_report must be present ─────────────────────────────
+     if (output.step_report == null) {
+       return {
+         ok: false,
+@@ -265,7 +386,7 @@ export async function dispatchRun(
+       };
+     }
+ 
+-    // ── 4.5.5  Validate step_report ────────────────────────────────────
++    // ── §8.7  Validate step_report via dep ────────────────────────────
+     const validation = deps.validateStepReport(output.step_report);
+     if (!validation.ok) {
+       return {
+@@ -283,12 +404,59 @@ export async function dispatchRun(
+       };
+     }
+ 
+-    // ── Write raw_log if provided ──────────────────────────────────────
++    // Extract governance-relevant fields from the validated report.
++    const reportObj = output.step_report as Record<string, unknown>;
++    const state_impact = typeof reportObj["state_impact"] === "string"
++      ? reportObj["state_impact"]
++      : "";
++    const trust_notes = typeof reportObj["trust_notes"] === "string"
++      ? reportObj["trust_notes"]
++      : undefined;
++
++    // ── §8.8  Slice 4: trust_change requires non-empty trust_notes ─────
++    // This check fires BEFORE writeStepReport — a violating report is not written.
++    if (state_impact === "trust_change") {
++      if (trust_notes == null || trust_notes.trim().length === 0) {
++        return {
++          ok: false,
++          run_id: req.run_id,
++          error: {
++            code: "TRUST_CHANGE_MISSING_NOTES",
++            message: "trust_change requires a non-empty trust_notes field",
++            step_index: step.step_index,
++            step_id: step.step_id,
++            actor: step.actor,
++          },
++          written_step_reports,
++        };
++      }
++    }
++
++    // ── §8.9  Slice 4: defensive state_impact assertion ────────────────
++    // The Slice 2 validator already enforces the enum, but we assert here
++    // as a last line of defence so the governance function is never called
++    // with an unknown value.
++    if (!KNOWN_STATE_IMPACTS.has(state_impact)) {
++      return {
++        ok: false,
++        run_id: req.run_id,
++        error: {
++          code: "STEP_REPORT_INVALID",
++          message: `unknown state_impact: "${state_impact}"`,
++          step_index: step.step_index,
++          step_id: step.step_id,
++          actor: step.actor,
++        },
++        written_step_reports,
++      };
++    }
++
++    // ── §8.10  Write raw_log if provided ───────────────────────────────
+     if (output.raw_log && deps.writeTextFile) {
+       await deps.writeTextFile(`${stepDir}/runner-log.txt`, output.raw_log);
+     }
+ 
+-    // ── 4.5.6  Write step report ───────────────────────────────────────
++    // ── §8.10  Write step report ───────────────────────────────────────
+     const writeResult = await deps.writeStepReport({
+       artifacts_root: req.artifacts_root,
+       step_index: step.step_index,
+@@ -312,12 +480,42 @@ export async function dispatchRun(
+       };
+     }
+ 
+-    // ── 4.5.7  Record written path ─────────────────────────────────────
++    // ── §8.11  Record written path ─────────────────────────────────────
+     written_step_reports.push({
+       step_index: step.step_index,
+       step_id: step.step_id,
+       path: writeResult.path,
+     });
++
++    // ── §8.12-13  Slice 4: Governance decision ─────────────────────────
++    // Evaluated AFTER writeStepReport; the report is persisted regardless.
++    const decision = governanceDecision(
++      state_impact,
++      trust_notes,
++      autoApplyFor,
++      requireManualApprovalFor,
++    );
++
++    if (decision === "require_manual_approval") {
++      return {
++        ok: false,
++        run_id: req.run_id,
++        error: {
++          code: "DISPATCH_HALTED_GOVERNANCE",
++          message: "manual approval required before execution can continue",
++          step_index: step.step_index,
++          step_id: step.step_id,
++          actor: step.actor,
++          cause: {
++            state_impact,
++            decision: "require_manual_approval",
++          },
++        },
++        written_step_reports,
++      };
++    }
++
++    // decision === "auto_apply" — continue to next step.
+   }
+ 
+   return { ok: true, run_id: req.run_id, written_step_reports };
+diff --git a/agent-os/src/dispatcher/errors.ts b/agent-os/src/dispatcher/errors.ts
+index f87f720..aa2d298 100644
+--- a/agent-os/src/dispatcher/errors.ts
++++ b/agent-os/src/dispatcher/errors.ts
+@@ -1,10 +1,11 @@
+ /**
+- * Agent OS v1.0 — Dispatcher Error Codes (Slice 3).
++ * Agent OS v1.0 — Dispatcher Error Codes (Slices 3 + 4).
+  *
+  * Exact error codes and result types for dispatchRun.
+  */
+ 
+ export type DispatchErrorCode =
++  // ── Slice 3 ────────────────────────────────────────────────────────────────
+   | "DISPATCH_INVALID_REQUEST"
+   | "DISPATCH_STEP_INDEX_GAP"
+   | "DISPATCH_CAPABILITIES_NOT_PERMITTED"
+@@ -14,7 +15,16 @@ export type DispatchErrorCode =
+   | "DISPATCH_STEP_REPORT_MISSING"
+   | "DISPATCH_STEP_REPORT_INVALID"
+   | "DISPATCH_WRITE_FAILED"
+-  | "DISPATCH_ABORTED_AFTER_FAILURE";
++  | "DISPATCH_ABORTED_AFTER_FAILURE"
++  // ── Slice 4 ────────────────────────────────────────────────────────────────
++  /** Pre-run gate: adapter governance fields missing or misconfigured. */
++  | "ADAPTER_GOVERNANCE_MISCONFIGURED"
++  /** Defensive assertion: state_impact is unknown despite passing validateStepReport. */
++  | "STEP_REPORT_INVALID"
++  /** trust_change step report missing non-empty trust_notes. */
++  | "TRUST_CHANGE_MISSING_NOTES"
++  /** Governance policy requires manual approval; dispatcher halted. */
++  | "DISPATCH_HALTED_GOVERNANCE";
+ 
+ export interface DispatchError {
+   code: DispatchErrorCode;
+-- 
+2.52.0.windows.1
+

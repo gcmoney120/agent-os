@@ -1,0 +1,18 @@
+{
+  "name": "@agent-os/core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Agent OS — governed multi-agent execution engine",
+  "scripts": {
+    "test": "node --import tsx --test __tests__/loadProjectAdapter.test.ts __tests__/stepReport.test.ts __tests__/memory.test.ts __tests__/pipeline-backend.test.ts __tests__/pipeline-ingest.test.ts __tests__/pipeline-promote.test.ts __tests__/pipeline-run-ingest.test.ts __tests__/pipeline-step-report-adapter.test.ts __tests__/pipeline-run-step-ingestion.test.ts src/dispatcher/__tests__/dispatchRun.test.ts src/dispatcher/__tests__/dispatchResume.test.ts src/dispatcher/__tests__/dispatchRun-k9.test.ts src/dispatcher/__tests__/dispatchRun-k10.test.ts src/dispatcher/__tests__/artifact-adapter.test.ts src/memory/pipeline/__tests__/artifact-adapter-k12.test.ts src/memory/pipeline/__tests__/artifact-adapter-k13.test.ts src/relay/__tests__/relay.test.ts src/relay/__tests__/relay-run.test.ts tests/memory-retrieval/pagination.test.ts tests/memory-retrieval/query-guards.test.ts tests/memory-retrieval/episodic-read.test.ts tests/memory-retrieval/decision-read.test.ts tests/embedding/embedding-pipeline.test.ts tests/vector-search.test.ts tests/hybrid-search.test.ts tests/memory-context/memory-context.test.ts tests/governance-decision/ingest.test.ts src/planner/__tests__/planner-p1s1.test.ts src/planner/__tests__/planner-p1s2.test.ts src/planner/__tests__/planner-p1s3.test.ts src/planner/__tests__/planner-p1s4.test.ts src/planner/__tests__/planner-p1s5.test.ts src/planner/__tests__/planner-p1s6.test.ts src/planner/__tests__/planner-p1s7.test.ts src/runtime/__tests__/bridge.test.ts src/runtime/__tests__/compose.test.ts src/runtime/__tests__/orchestrator.test.ts",
+    "validate": "tsx src/cli.ts validate"
+  },
+  "bin": {
+    "agent-os": "./src/cli.ts"
+  },
+  "devDependencies": {
+    "tsx": "^4.0.0",
+    "typescript": "^5.0.0"
+  }
+}
