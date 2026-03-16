@@ -101,18 +101,17 @@ For SYSTEM_STATE.md: use the milestone/progress history sections as the authorit
 **Recommended correction:** Future governed amendment to submission.md to add a Reroute count limit or escalation trigger consistent with the correction count mechanism (e.g., maximum 2 Reroutes to the same agent before escalation to principal).
 **Status:** OPEN — future governed amendment. Non-blocking.
 
-### X1-TS-1 (OPEN — deferred to X3/X4)
+### X1-TS-1 (RESOLVED — X3)
 **Raised:** 2026-03-16 (Sentinel X1 trust review, DL-033)
+**Resolved:** 2026-03-16 (X3, DL-045/DL-046/DL-047)
 **Scope:** Byte-identity enforcement mechanism for shared dispatch/identity files
-**Description:** The full-copy model for dispatch commands and identity files (~13 files identical across agent-os and pest-free-nz repos) relies on Sentinel byte-identity enforcement to detect drift. The specific enforcement mechanism (automated hash comparison, CI check, or manual audit) is deferred to X3/X4. Until then, the copy model is operative but unenforced — drift between repos would not be automatically detected.
-**Status:** OPEN — deferred to X3/X4. Non-blocking for X2.
+**Resolution:** X3 created `shared-files.md` listing all 14 shared files with complete Sentinel byte-identity enforcement protocol (diff method, workspace-root paths, HIGH severity for any difference). Sentinel X3 verified all 14 files byte-identical (TS-3). Compass X3 confirmed AC-X3-11 FULLY MET.
 
-### X1-TS-2 (OPEN — Command pre-X2 action)
+### X1-TS-2 (RESOLVED — pre-X2)
 **Raised:** 2026-03-16 (Sentinel X1 trust review, DL-033)
+**Resolved:** 2026-03-16 (Command pre-X2 action, confirmed DL-036)
 **Scope:** .env.production credential exposure — pre-existing
-**Description:** `.env.production` is untracked but not listed in `.gitignore`. Contains production credentials (DATABASE_URL, DIRECT_URL, ENCRYPTION_KEY, GMAIL_APP_PASSWORD, NEXTAUTH_SECRET, VERCEL_OIDC_TOKEN). Pre-existing condition, not introduced by X1. Risk: accidental `git add .` could commit credentials.
-**Recommended action:** Add `.env.production` to `.gitignore` before X2 activation.
-**Status:** OPEN — Command pre-X2 action. Blocking for X2 activation.
+**Resolution:** `.env.production` added to `.gitignore` before X2 activation.
 
 ### B-2-TS2 (OPEN — future governed amendment)
 **Raised:** 2026-03-16 (Sentinel B-2-S1 trust review, DL-024 finding S-2)

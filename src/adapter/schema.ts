@@ -80,6 +80,12 @@ export interface ProjectAdapter {
 
   execution: {
     test_command: string;
+    /** Shell command to build the project. Optional in v1.0. */
+    build_command?: string;
+    /** Shell command to deploy the project. Optional in v1.0. */
+    deploy_command?: string;
+    /** Shell command to lint the project. Optional in v1.0. */
+    lint_command?: string;
   };
 
   limits: {

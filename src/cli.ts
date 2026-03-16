@@ -26,6 +26,8 @@ import { writeApprovalArtifact } from "./approval/writeApproval.js";
 import type { StepReportV1 } from "./step-report/stepReport.schema.js";
 import { executeRun } from "./runtime/orchestrator.js";
 import type { PlanArtifact } from "./planner/types.js";
+import { createAgentOSServer } from "./server/server.js";
+import type { ApiKeyEntry } from "./server/auth.js";
 
 // ── Argument parsing ──────────────────────────────────────────────────────────
 
@@ -43,7 +45,8 @@ function usage(): void {
     "  agent-os relay export-run --run-id <id> --runs-root <path> --out <dir> [--overwrite]\n" +
     "  agent-os relay import-run <bundle> --into <runs_root> [--overwrite]\n" +
     "  agent-os relay approve --run <run_id> --step <step_id|step_index> --approved-by <id> --note <note> [--runs-root <path>]\n" +
-    "  agent-os relay resume --run <run_id> --step <step_id|step_index>\n",
+    "  agent-os relay resume --run <run_id> --step <step_id|step_index>\n" +
+    "  agent-os serve [--port <port>] [--host <host>] [--api-key <key>]\n",
   );
 }
 
@@ -394,6 +397,31 @@ function cmdRelayResume(argv: string[]): void {
   );
 }
 
+// ── Serve ─────────────────────────────────────────────────────────────────────
+
+async function cmdServe(argv: string[]): Promise<void> {
+  const port = Number(getArg(argv, "--port") ?? "3100");
+  const host = getArg(argv, "--host") ?? "127.0.0.1";
+  const apiKey = getArg(argv, "--api-key") ?? process.env.AGENT_OS_API_KEY;
+
+  if (!apiKey) {
+    process.stderr.write(
+      "agent-os serve: API key required.\n" +
+      "  Set AGENT_OS_API_KEY env var or pass --api-key <key>\n",
+    );
+    process.exit(1);
+  }
+
+  const apiKeys: ApiKeyEntry[] = [{
+    key: apiKey,
+    label: "cli",
+    principal: "cli-user",
+  }];
+
+  await createAgentOSServer({ port, host, apiKeys });
+  // Server runs until process is killed.
+}
+
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
@@ -409,6 +437,9 @@ async function main(): Promise<void> {
       break;
     case "run":
       await cmdRun(argv);
+      break;
+    case "serve":
+      await cmdServe(argv);
       break;
     case "relay": {
       const subcmd = argv[1];

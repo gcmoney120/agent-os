@@ -98,3 +98,80 @@ purpose: Running chain record for [SLICE-ID]. Command creates this document at s
 - **Closed:** [ISO-8601 timestamp]
 - **DECISION_LOG.md entry:** [DL-XXX]
 - **SLICE_LEDGER.md entry:** [SL-XXX]
+
+---
+---
+
+# Express Variant — Chain Context Template
+
+Use this template for Express Lane slices (Administrative class, no trust surfaces). See COMMAND_ID.md §41 and CONTROL_PLANE_OPERATING_MODEL.md §16.
+
+---
+
+```markdown
+---
+file_class: CLASS_A_LIVE_CHAIN
+owner: Command
+write_rule: OVERWRITE_BY_COMMAND
+purpose: Running chain record for [SLICE-ID] (Express Lane). Command creates this document at Express activation and updates it at Forge review. Archived at slice closure.
+---
+
+# Chain Context — [SLICE-ID] (Express)
+
+## Task
+
+[Original task description as framed by the principal and scoped by Command at activation]
+
+**Governance class:** Administrative (Express)
+**Activated:** [ISO-8601 timestamp]
+**Required closure gates:** Command review only
+
+---
+
+## Dispatch Log
+
+### Stage 1 — Forge (Express: single stage)
+
+- **Dispatched:** [ISO-8601 timestamp]
+- **Dispatch Criteria:** [What Forge was asked to do — Command directive, no Atlas architecture]
+- **Output Summary:** [Brief summary of the Forge submission — populated after submission received]
+- **Review Decision:** Approved / Rejected / Elevated
+- **Review Reasoning:** [Why Command made this decision]
+- **Key Decisions Made:** [Any decisions relevant to audit trail]
+
+---
+
+## Corrections
+
+[Each rejection logged here. If no corrections, write "None."]
+
+---
+
+## Escalations
+
+[Any escalations or elevations logged here. If none, write "None."]
+
+- If elevated to full pipeline: [ISO-8601] — Elevation trigger: [reason]. Slice continues as standard pipeline from this point.
+
+---
+
+## Status
+
+- **Current stage:** [e.g., "Forge DISPATCHED, awaiting submission" / "Forge APPROVED — closure pending"]
+- **Next action:** [single explicit action]
+- **Chain complete:** [yes / no]
+
+---
+
+## Final State
+
+[Populated at closure.]
+
+- **Outcome:** completed / elevated / abandoned
+- **Governed Artifacts Updated:** [list all control-plane files written or updated at closure]
+- **Sentinel ruling:** N/A (Express Lane — no trust surfaces)
+- **Compass ruling:** N/A (Express Lane — Command validated directly)
+- **Closed:** [ISO-8601 timestamp]
+- **DECISION_LOG.md entry:** [DL-XXX]
+- **SLICE_LEDGER.md entry:** [SL-XXX]
+```

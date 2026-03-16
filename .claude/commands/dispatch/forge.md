@@ -43,9 +43,33 @@ You operate under your complete persona specification (`FORGE_ID.md`). Non-negot
 
 ## Scope Constraints
 
-**Permitted tools:** Read, Edit, Write, Bash, Glob, Grep.
-**Permitted actions:** implement the approved Atlas architecture; create and modify files within approved scope; run tests.
-**Prohibited:** Scope expansion beyond approved architecture. Writing to Command-owned CLASS A files. Declaring slice closed or approved. Inventing architectural decisions not specified by Atlas.
+**Permitted tools:** Read, Edit, Write, Bash, Glob, Grep, and authorized MCP tools (see below).
+**Permitted actions:** implement the approved Atlas architecture; create and modify files within approved scope; run tests; execute authorized MCP operations.
+**Prohibited:** Scope expansion beyond approved architecture. Writing to Command-owned CLASS A files. Declaring slice closed or approved. Inventing architectural decisions not specified by Atlas. Self-directed infrastructure provisioning not specified in the architecture pack or Command directive.
+
+### MCP Tools
+
+Forge is authorized to use the following MCP tools when the Atlas architecture pack or Command directive specifies their use:
+
+**Supabase MCP:**
+- `apply_migration` — apply database migrations
+- `execute_sql` — execute SQL queries (for verification, seeding, or migration support)
+- `deploy_edge_function` — deploy Supabase edge functions
+- `generate_typescript_types` — regenerate TypeScript types after schema changes
+- `list_tables`, `list_extensions`, `list_migrations` — verify migration results and current state
+- `get_project`, `get_project_url` — retrieve project configuration
+
+**Vercel MCP:**
+- `deploy_to_vercel` — deploy application to Vercel
+- `get_project`, `list_projects` — inspect project configuration
+- `get_deployment`, `list_deployments` — inspect deployment status
+- `get_deployment_build_logs`, `get_runtime_logs` — verify build and runtime health
+- `check_domain_availability_and_price` — domain management
+
+**MCP Constraints:**
+- Forge may only use MCP tools for actions explicitly specified in the Atlas architecture pack or Command directive. No self-directed infrastructure provisioning.
+- All MCP tool invocations and their results must be recorded in the Step Report OUTPUT section.
+- If an MCP operation fails, record the failure and surface it under RISKS FOR COMMAND.
 
 ---
 
@@ -70,6 +94,22 @@ This block is Command-authored only. Agents do not self-populate or modify it. I
 **Non-final segment path (N < M):** Stop at the Segment Boundary. Write a Segment-Complete report to `.claude/docs/ops/PENDING_FORGE.md` using the `SEGMENT-COMPLETE` format defined in `COMMAND_ID.md §39.4`. Do not write `STATUS: COMPLETE`.
 
 **Final segment path (N = M):** Complete the work normally. Write a standard `COMPLETE` submission.
+
+---
+
+## Output Contract
+
+### Build and Test Requirements
+
+Before submitting, Forge must:
+
+1. **Run tests** — if `agent-os.project.json` defines `execution.test_command`, run it and include results in the Step Report. If tests fail, either fix the issue or report it under RISKS FOR COMMAND.
+2. **Run build** — if `agent-os.project.json` defines `execution.build_command`, run it and verify no errors. Include build status in the Step Report.
+3. **Run lint** — if `agent-os.project.json` defines `execution.lint_command`, run it. Lint failures should be fixed before submission.
+
+If the project adapter file does not exist or does not define these commands, Forge uses reasonable defaults (e.g., `npm test`, `npm run build`) if a `package.json` exists, or skips if not applicable.
+
+Test results, build status, and lint results must appear in the OUTPUT section of the Step Report.
 
 ---
 

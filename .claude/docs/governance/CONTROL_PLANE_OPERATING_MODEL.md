@@ -542,7 +542,77 @@ The single-file Command identity structure is a simplification. No prior contrac
 
 ---
 
-*This document is authoritative for the control-plane operating model as established by CTRL-S2, amended by CTRL-S5, amended by CTRL-S6, amended by AS-2, and amended by B-2. CTRL-S1 accepted file ownership and write rules are preserved with no contract drift. CTRL-S6 revised §13 (Command Identity Model — single-surface reunification); AS-2 added §14 (A-Series Command Infrastructure); B-2 added §15 (Session Boundary Protocol); no prior contracts beyond the surface model were altered.*
+*This document is authoritative for the control-plane operating model as established by CTRL-S2, amended by CTRL-S5, amended by CTRL-S6, amended by AS-2, amended by B-2, and amended by X3-0A (Express Lane Governance). CTRL-S1 accepted file ownership and write rules are preserved with no contract drift. CTRL-S6 revised §13 (Command Identity Model — single-surface reunification); AS-2 added §14 (A-Series Command Infrastructure); B-2 added §15 (Session Boundary Protocol); X3-0A added §16 (Express Lane Governance); no prior contracts beyond the surface model were altered.*
+
+---
+
+## §16. Express Lane Governance
+
+**Established by:** X3-0A
+**Authority:** Command
+
+### §16.1 Overview
+
+The Express Lane is a governed alternative pipeline for Administrative-class slices that do not touch trust surfaces and do not require new architecture. It compresses the standard four-agent pipeline (Atlas → Forge → Sentinel → Compass) into a single-agent path (Forge only) with Command review.
+
+Express Lane is registered as a governed operating mode. It does not replace the standard pipeline — it provides a lighter path for qualifying work while preserving the audit trail.
+
+### §16.2 Command File
+
+| File | Location | Purpose |
+|------|----------|---------|
+| `express.md` | `.claude/commands/govern/` | Express Lane governance protocol slash command |
+
+Write authority: Created under Command authorization. Post-creation amendments require a Command directive and are implemented by Forge as a governed slice.
+
+### §16.3 Express Lane Pipeline
+
+```
+Command → Forge → Command review → Close
+```
+
+Skipped stages: Atlas architecture, Sentinel security review, Compass validation. Command validates directly at review.
+
+### §16.4 Eligibility
+
+Express Lane is available only when ALL conditions are met:
+1. Governance class is Administrative
+2. No trust surfaces are involved (directly or indirectly)
+3. No new architecture is required
+4. Scope is bounded to a single Forge dispatch
+
+**Hard gate:** Express Lane is prohibited when `trust_surfaces_involved === true`. This is non-negotiable.
+
+### §16.5 File Ownership and Write Rules
+
+All file ownership rules from §4 and write rules from §5 continue to apply without modification. Express Lane does not alter any file class, ownership assignment, or write rule.
+
+Specifically:
+- Command remains the sole writer of all CLASS_A_LIVE files
+- DECISION_LOG.md and SLICE_LEDGER.md remain append-only
+- Forge writes only to PENDING_FORGE.md
+- Chain context documents remain Command-owned
+
+### §16.6 Required Audit Trail
+
+Express Lane slices MUST produce:
+- Chain context document (Express variant template)
+- DECISION_LOG.md entries (activation, Forge approval, closure)
+- SLICE_LEDGER.md closure record (with Express Lane notation)
+- audit-log.jsonl entry
+- COMMAND_DECISION.md closure ruling
+
+### §16.7 Entries Not Created
+
+Express Lane slices do NOT create:
+- PENDING_ATLAS.md submission (no Atlas stage)
+- PENDING_SENTINEL.md submission (no Sentinel review)
+- PENDING_COMPASS.md submission (no Compass validation)
+- ATLAS_LATEST.md update (no architecture change)
+
+### §16.8 Elevation
+
+Command may elevate an Express Lane slice to the full pipeline at any point during execution if trust surfaces are discovered, complexity exceeds Administrative class, or scope expands. Elevation is governed by COMMAND_ID.md §41.4. The slice continues through the full pipeline from the point of elevation.
 
 ---
 
@@ -563,7 +633,7 @@ Command infrastructure files are markdown prompt templates invoked as slash comm
 |-----------|-------|---------|
 | `.claude/commands/dispatch/` | `atlas.md`, `forge.md`, `sentinel.md`, `compass.md` | Agent dispatch commands |
 | `.claude/commands/review/` | `submission.md` | Command review protocol command |
-| `.claude/commands/govern/` | `activate-slice.md`, `close-slice.md`, `plan.md` | Slice governance commands |
+| `.claude/commands/govern/` | `activate-slice.md`, `close-slice.md`, `plan.md`, `express.md`, `init-project.md` | Slice governance commands |
 
 **Write authority:** Forge creates these files in AS-2 under Command authorization. Post-creation, amendments require a Command directive and are implemented by Forge as a governed slice. No agent modifies command files without Command authorization.
 

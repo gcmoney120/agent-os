@@ -8,26 +8,17 @@ purpose: Identifies the single active slice currently authorized for implementat
 # ACTIVE_SLICE
 
 ## Current active slice
-X2 — Physical Extraction
-
-## Status
-DEFINED — Atlas architecture required
-
-## Series
-X-Series — Repository Extraction (X1 → X2 → X3 → X4)
-
-## Governance class
-Implementation
-
-## Required closure gates
-Sentinel PASS (not FAIL) + Compass closure-readiness confirmation (no NOT MET criteria)
+None.
 
 ## Last closed slice
-X1 — Extraction Readiness Audit
+X3 — PestFree NZ Governance Bootstrap
 Closed: 2026-03-16
 Status: ACCEPTED
-SLICE_LEDGER.md entry: SL-012
-DECISION_LOG.md entry: DL-035
+SLICE_LEDGER.md entry: SL-014
+DECISION_LOG.md entry: DL-047
+
+## Series
+X-Series — Repository Extraction: COMPLETE (X1–X3 all ACCEPTED)
 
 ## Last updated
 2026-03-16

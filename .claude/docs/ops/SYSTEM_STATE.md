@@ -6,11 +6,11 @@ Maintained by: Command
 # 1. CURRENT_STATE
 Platform: PestFree NZ
 Agent OS Status:
-Building inside host repository with extraction-safe architecture.
+Standalone repository. Extracted from host repository via X-Series.
 Current Phase:
-Agent OS → Runtime Integration Layer (R-Series)
+Post-extraction. X-Series COMPLETE (X1–X3 ACCEPTED). No active slice.
 Current Slice:
-R2 — Plan-Dispatch Bridge + Composition Root (+ NB-2 resolution)
+None — awaiting Command directive.
 
 Knowledge Layer Status:
 COMPLETE (K1–K13)

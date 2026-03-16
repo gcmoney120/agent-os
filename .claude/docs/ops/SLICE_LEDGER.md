@@ -151,3 +151,27 @@ DECISION_LOG: DL-035
 NOTES: Extraction Readiness Audit complete. Extraction manifest operative at `.claude/docs/ops/extraction-manifest.md` (13 sections, ~495 lines). Every file in host repository classified. Zero cross-boundary imports confirmed. Two-repo extraction model confirmed. Key decisions: full-copy model for dispatch/identity files with Sentinel byte-identity enforcement; workspace root prohibited; cross-repo classification on shared-surface slices only; X4 is Command operational validation; fresh git history for agent-os. X1-TS-1 and X1-TS-2 carried to OPEN_ISSUES.md. Next: X2 — Physical Extraction. Entry ID: SL-012.
 ---
 
+---
+SLICE: X2 — Physical Extraction
+SERIES: X-Series — Repository Extraction
+OPENED: 2026-03-16
+CLOSED: 2026-03-16
+STATUS: ACCEPTED
+SENTINEL: PASS (DL-039 — 5 surfaces CLEAR, X2-TS-3-N1 LOW .gitattributes advisory)
+COMPASS: PASS (DL-040 — 12/12 FULLY MET)
+DECISION_LOG: DL-041
+NOTES: Physical extraction complete. 217 files committed to standalone agent-os repo (commit 6ec9c06, @agent-os/core v0.1.0). Copy-not-move verified. X2-TS-3-N1 carry-forward (.gitattributes advisory). Next: X3 — PestFree NZ Governance Bootstrap. Entry ID: SL-013.
+---
+
+---
+SLICE: X3 — PestFree NZ Governance Bootstrap
+SERIES: X-Series — Repository Extraction
+OPENED: 2026-03-16
+CLOSED: 2026-03-16
+STATUS: ACCEPTED
+SENTINEL: PASS (DL-045 — 7/7 trust surfaces CLEAR, zero findings)
+COMPASS: PASS (DL-046 — 12/12 ACs FULLY MET)
+DECISION_LOG: DL-047
+NOTES: X-SERIES COMPLETE. PestFree NZ governance bootstrap delivered. Commit 8dfa3db (pfnz), 275e1a0 (agent-os .gitattributes). agent-os/ removed from pfnz. 14 shared files byte-identical. CONTROL_PLANE pfnz variant established. All carry-forwards resolved: X1-TS-1 (shared-files.md byte-identity enforcement), X2-TS-3-N1 (.gitattributes in both repos). pfnz governance operates independently. Entry ID: SL-014.
+---
+

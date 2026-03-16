@@ -1181,3 +1181,85 @@ Required fields per entry:
 | `close` | Slice formally closed |
 
 New action types may be added additively in a future governed amendment without invalidating historical entries.
+
+---
+
+## 41. Express Lane Protocol
+
+This section defines Command's Express Lane — a compressed governance path for Administrative-class slices that do not touch trust surfaces and do not require new architecture.
+
+---
+
+### §41.1 Express Lane Eligibility
+
+A slice is eligible for Express Lane governance if and only if ALL of the following conditions are met:
+
+1. **Governance class is Administrative** — documentation, configuration, tooling, formatting, non-functional improvements, or similar low-risk work
+2. **No trust surfaces involved** — no identity, access control, audit, agreements, state machines, personal data, or security boundaries are touched, directly or indirectly
+3. **No new architecture required** — the change is implementable against existing patterns or is self-contained enough that Atlas design adds no value
+4. **Scope is bounded** — the change can be fully described, implemented, and verified in a single Forge dispatch
+
+**Hard gate:** Express Lane is prohibited when `trust_surfaces_involved === true`. This gate is non-negotiable. If there is any doubt about trust surface involvement, use the full pipeline.
+
+### §41.2 Express Pipeline
+
+The Express Lane replaces the standard four-agent pipeline with a compressed path:
+
+```
+Command → Forge → Command review → Close
+```
+
+| Standard Pipeline Stage | Express Lane Equivalent |
+|------------------------|------------------------|
+| Atlas architecture | Skipped — Command directive serves as implementation contract |
+| Forge implementation | Preserved — Forge implements per Command directive |
+| Sentinel review | Skipped — no trust surfaces involved |
+| Compass validation | Skipped — Command validates directly |
+| Command closure | Preserved — full closure sequence with Express notation |
+
+### §41.3 Audit Trail Preservation
+
+Express Lane preserves the governance audit trail:
+
+- **Chain context document** created using the Express variant template (simplified single-stage format)
+- **DECISION_LOG.md** entries appended at activation, Forge approval, and closure
+- **SLICE_LEDGER.md** closure record with Express Lane notation
+- **audit-log.jsonl** entry at closure
+- **COMMAND_DECISION.md** ruling written at closure
+
+Express Lane does NOT create:
+- PENDING_ATLAS.md submission
+- PENDING_SENTINEL.md submission
+- PENDING_COMPASS.md submission
+- ATLAS_LATEST.md update
+
+### §41.4 Express Lane Elevation
+
+Command may elevate an Express Lane slice to the full pipeline at any point if:
+
+- Trust surfaces are discovered during Forge implementation (missed during eligibility check)
+- Architectural complexity exceeds Administrative class
+- Scope has expanded beyond the original directive
+
+Elevation procedure:
+1. Pause Forge (if in progress)
+2. Update SLICE_STATUS.md to DEFINED
+3. Append elevation entry to DECISION_LOG.md with reason
+4. Continue through the full pipeline (Atlas → Forge → Sentinel → Compass)
+
+Elevation is not a failure. It is the governance model self-correcting.
+
+### §41.5 DECISION_LOG Vocabulary Extension
+
+Express Lane introduces two new action types for DECISION_LOG.md entries:
+
+| Entry Type | Meaning |
+|-----------|---------|
+| `express-activate` | Slice activated via Express Lane |
+| `express-close` | Slice closed via Express Lane |
+
+These are additive extensions to the existing vocabulary. Existing entry types are unchanged.
+
+### §41.6 Command File Reference
+
+The Express Lane protocol is implemented as a slash command at `.claude/commands/govern/express.md`. This command executes the full Express Lane lifecycle in a single Command session: eligibility validation → activation → Forge dispatch → review → closure.
