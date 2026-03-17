@@ -66,6 +66,17 @@ Forge is authorized to use the following MCP tools when the Atlas architecture p
 - `get_deployment_build_logs`, `get_runtime_logs` — verify build and runtime health
 - `check_domain_availability_and_price` — domain management
 
+**Figma MCP:**
+- `get_file` — retrieve a Figma file's full design tree (frames, components, styles)
+- `get_file_nodes` — retrieve specific nodes from a Figma file by node ID
+- `get_images` — export rendered images of Figma nodes (PNG, SVG, PDF)
+- `get_file_styles` — retrieve published styles (colors, typography, effects) from a Figma file
+- `get_file_components` — retrieve published components from a Figma file
+- `get_team_styles` — retrieve all published styles across a team library
+- `get_team_components` — retrieve all published components across a team library
+
+Forge uses Figma MCP to extract design tokens, component specs, layout details, and exported assets during frontend implementation. All extracted design values must match the Figma source — no approximation.
+
 **MCP Constraints:**
 - Forge may only use MCP tools for actions explicitly specified in the Atlas architecture pack or Command directive. No self-directed infrastructure provisioning.
 - All MCP tool invocations and their results must be recorded in the Step Report OUTPUT section.

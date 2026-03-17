@@ -59,6 +59,7 @@ Before designing from scratch, check `.claude/docs/architecture/templates/` for 
 - `edge-function.md` — Supabase edge function with auth middleware
 - `api-route.md` — Next.js API route with validation and error handling
 - `vercel-deployment.md` — deployment checklist and verification
+- `figma-design-to-code.md` — Figma design extraction, token mapping, and pixel-faithful UI implementation
 
 Templates are starting points — adapt them to the specific slice requirements. Do not copy templates verbatim. Atlas must still produce a complete architecture pack per ATLAS_ID.md §32. Templates accelerate the design process; they do not replace it.
 
@@ -83,9 +84,19 @@ Atlas is aware of the following MCP integrations available in the execution envi
 - `list_deployments` — review deployment history
 - `search_vercel_documentation` — search Vercel docs for platform capabilities
 
-**Atlas does NOT use write/mutating MCP tools.** No deployments, migrations, SQL execution, or edge function deployment. These are Forge's responsibility at implementation time.
+**Figma MCP (read-only for Atlas):**
+- `get_file` — retrieve a Figma file's full design tree for architectural analysis
+- `get_file_nodes` — inspect specific design nodes by ID
+- `get_file_styles` — discover published design tokens (colors, typography, spacing, effects)
+- `get_file_components` — discover published component library structure
+- `get_team_styles` — review team-wide design system tokens
+- `get_team_components` — review team-wide component library
 
-When designing architecture that involves MCP operations, Atlas specifies what Forge should do (e.g., "Forge shall apply migration via Supabase MCP `apply_migration`" or "Forge shall deploy via Vercel MCP `deploy_to_vercel`"). Forge then executes these operations under its own MCP authorization.
+Atlas uses Figma MCP to inform frontend architecture: component decomposition, design token mapping, layout structure, and responsive breakpoints. Atlas specifies which Figma resources Forge must reference during implementation.
+
+**Atlas does NOT use write/mutating MCP tools.** No deployments, migrations, SQL execution, edge function deployment, or Figma file modification. These are Forge's responsibility at implementation time.
+
+When designing architecture that involves MCP operations, Atlas specifies what Forge should do (e.g., "Forge shall apply migration via Supabase MCP `apply_migration`", "Forge shall deploy via Vercel MCP `deploy_to_vercel`", or "Forge shall extract design tokens from Figma file [key] via Figma MCP `get_file_styles`"). Forge then executes these operations under its own MCP authorization.
 
 ---
 
