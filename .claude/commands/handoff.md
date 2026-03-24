@@ -173,10 +173,10 @@ Do NOT spawn a successor session. Output:
 Spawn a successor session. Execute via Bash:
 
 ```powershell
-Start-Process powershell -ArgumentList '-NoExit', '-Command', "Set-Location 'PROJECT_PATH'; claude --dangerously-skip-permissions '/resume'"
+Start-Process powershell -ArgumentList '-NoExit', '-Command', "Set-Location 'PROJECT_PATH'; claude '/resume'"
 ```
 
-Replace `PROJECT_PATH` with the actual absolute path to the project root (the directory containing `.claude/` and `CLAUDE.md`). Note: no `-p` flag — the successor opens Claude Code interactively so the session stays running and visible.
+Replace `PROJECT_PATH` with the actual absolute path to the project root (the directory containing `.claude/` and `CLAUDE.md`). Permissions are handled by `settings.local.json` in the project — no flags needed.
 
 ### Step 6 — Confirm and Exit
 

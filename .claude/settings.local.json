@@ -1,11 +1,22 @@
 {
   "permissions": {
     "allow": [
-      "Bash(node --version:*)",
+      "Read",
+      "Write",
+      "Edit",
+      "Bash(git:*)",
+      "Bash(node:*)",
       "Bash(npm:*)",
-      "Bash(npx tsc:*)",
-      "Bash(npx tsx:*)",
-      "Bash(git:*)"
+      "Bash(npx:*)",
+      "Bash(claude:*)",
+      "Bash(powershell:*)",
+      "Bash(Start-Process:*)",
+      "Bash(ls:*)",
+      "Bash(cat:*)",
+      "Bash(cp:*)",
+      "Bash(mkdir:*)",
+      "Bash(find:*)",
+      "Bash(cd:*)"
     ]
   }
 }

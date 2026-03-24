@@ -107,7 +107,7 @@ Write-Host "============================================" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "  Project:  $ProjectPath" -ForegroundColor White
 Write-Host "  Mode:     $ModeDisplay" -ForegroundColor White
-Write-Host "  Safety:   --dangerously-skip-permissions" -ForegroundColor Yellow
+Write-Host "  Safety:   Permissions via settings.local.json" -ForegroundColor Yellow
 Write-Host ""
 Write-Host "  The chain will run autonomously until:" -ForegroundColor Gray
 Write-Host "    - Work queue is empty (COMPLETE)" -ForegroundColor Gray
@@ -121,7 +121,7 @@ Write-Host ""
 # Uses EncodedCommand to avoid quoting issues with nested PowerShell strings.
 # No -p flag: Claude Code opens interactively, receives the prompt as first message,
 # and stays running so you can watch it work and it can hand off to successor sessions.
-$CommandToRun = "Set-Location -LiteralPath '$ProjectPath'; claude --dangerously-skip-permissions '$Prompt'"
+$CommandToRun = "Set-Location -LiteralPath '$ProjectPath'; claude '$Prompt'"
 $EncodedBytes = [System.Text.Encoding]::Unicode.GetBytes($CommandToRun)
 $EncodedCmd = [System.Convert]::ToBase64String($EncodedBytes)
 Start-Process powershell -ArgumentList "-NoExit", "-EncodedCommand", $EncodedCmd
