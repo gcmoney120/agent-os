@@ -117,9 +117,11 @@ Write-Host ""
 Write-Host "============================================" -ForegroundColor Cyan
 Write-Host ""
 
-# Launch Claude Code in a new PowerShell window using EncodedCommand
-# to avoid all quoting/escaping issues with nested PowerShell strings.
-$CommandToRun = "Set-Location -LiteralPath '$ProjectPath'; claude -p '$Prompt' --dangerously-skip-permissions"
+# Launch Claude Code interactively in a new PowerShell window.
+# Uses EncodedCommand to avoid quoting issues with nested PowerShell strings.
+# No -p flag: Claude Code opens interactively, receives the prompt as first message,
+# and stays running so you can watch it work and it can hand off to successor sessions.
+$CommandToRun = "Set-Location -LiteralPath '$ProjectPath'; claude --dangerously-skip-permissions '$Prompt'"
 $EncodedBytes = [System.Text.Encoding]::Unicode.GetBytes($CommandToRun)
 $EncodedCmd = [System.Convert]::ToBase64String($EncodedBytes)
 Start-Process powershell -ArgumentList "-NoExit", "-EncodedCommand", $EncodedCmd
