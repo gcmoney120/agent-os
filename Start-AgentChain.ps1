@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Agent OS — Autonomous Session Chain Launcher
+    Agent OS - Autonomous Session Chain Launcher
 
 .DESCRIPTION
     Starts or resumes an autonomous Claude Code execution chain.
@@ -38,8 +38,6 @@ param(
     [Parameter(Mandatory = $false)]
     [string]$ProjectPath = $PSScriptRoot
 )
-
-# ── Validation ────────────────────────────────────────────────
 
 # Mutual exclusivity
 if ($Task -and $Resume) {
@@ -91,8 +89,7 @@ if ($Resume) {
     }
 }
 
-# ── Build Prompt ──────────────────────────────────────────────
-
+# Build prompt
 if ($Resume) {
     $Prompt = "/resume"
     $ModeDisplay = "Resume from chain-context.md"
@@ -102,11 +99,10 @@ else {
     $ModeDisplay = "New task: $Task"
 }
 
-# ── Launch ────────────────────────────────────────────────────
-
+# Display banner
 Write-Host ""
 Write-Host "============================================" -ForegroundColor Cyan
-Write-Host "  Agent OS — Autonomous Chain Launcher" -ForegroundColor Cyan
+Write-Host "  Agent OS - Autonomous Chain Launcher" -ForegroundColor Cyan
 Write-Host "============================================" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "  Project:  $ProjectPath" -ForegroundColor White
@@ -121,14 +117,12 @@ Write-Host ""
 Write-Host "============================================" -ForegroundColor Cyan
 Write-Host ""
 
-# Launch Claude Code in a new PowerShell window
-# The handoff command within the session handles spawning successors.
-# This launcher just starts the first session.
-Start-Process powershell -ArgumentList @(
-    '-NoExit',
-    '-Command',
-    "Set-Location '$ProjectPath'; claude -p '$($Prompt -replace "'", "''")' --dangerously-skip-permissions"
-)
+# Launch Claude Code in a new PowerShell window using EncodedCommand
+# to avoid all quoting/escaping issues with nested PowerShell strings.
+$CommandToRun = "Set-Location -LiteralPath '$ProjectPath'; claude -p '$Prompt' --dangerously-skip-permissions"
+$EncodedBytes = [System.Text.Encoding]::Unicode.GetBytes($CommandToRun)
+$EncodedCmd = [System.Convert]::ToBase64String($EncodedBytes)
+Start-Process powershell -ArgumentList "-NoExit", "-EncodedCommand", $EncodedCmd
 
 Write-Host "Chain launched in new window." -ForegroundColor Green
 Write-Host "This window can be closed." -ForegroundColor Gray
