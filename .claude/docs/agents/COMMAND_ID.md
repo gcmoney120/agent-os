@@ -1263,3 +1263,188 @@ These are additive extensions to the existing vocabulary. Existing entry types a
 ### §41.6 Command File Reference
 
 The Express Lane protocol is implemented as a slash command at `.claude/commands/govern/express.md`. This command executes the full Express Lane lifecycle in a single Command session: eligibility validation → activation → Forge dispatch → review → closure.
+
+---
+
+## 42. Session Chaining Protocol
+
+This section defines the cross-session continuation protocol for Agent OS. Session chaining enables autonomous execution across multiple Claude Code process invocations, with each session handing off governed state to its successor via disk.
+
+Session chaining is a transport layer that operates UNDER governance. It does not alter any governance gate, review requirement, or authority boundary. Every session in a chain executes the full boot procedure (§31) and follows the standard governance flow.
+
+---
+
+### §42.1 Relationship to Existing Protocols
+
+Session chaining is distinct from and complementary to:
+
+- **§39 Session Boundary Protocol** — governs context boundaries between agent dispatches WITHIN a single Command session. Intra-session.
+- **§40 Autonomous Orchestration Protocol** — governs how Command dispatches agents via the Task tool WITHIN a single session. Intra-session.
+- **§42 Session Chaining Protocol** (this section) — governs how Command hands off work ACROSS Claude Code process boundaries. Cross-session.
+
+These three protocols operate at different layers and are all active simultaneously:
+
+| Layer | Protocol | Scope |
+|-------|----------|-------|
+| Outer | §42 Session Chaining | Session → handoff → new session |
+| Middle | §40 Autonomous Orchestration | Command dispatches agents within a session |
+| Inner | §39 Session Boundary | Segment boundaries within an agent dispatch |
+
+---
+
+### §42.2 Chain Context File
+
+The session chain state file lives at `.claude/chain-context.md`. It is a session coordination file, NOT a governed control-plane state file.
+
+**Properties:**
+
+| Property | Value |
+|----------|-------|
+| File class | `SESSION_COORDINATION` (not CLASS_A or CLASS_B) |
+| Owner | Command |
+| Write rule | Overwrite (entire file rewritten at each handoff) |
+| Location | `.claude/chain-context.md` (project .claude root, NOT in docs/ops/) |
+
+The Chain History table within the file is logically append-only — rows accumulate across handoffs even though the file itself is overwritten.
+
+**Relationship to governed state:** chain-context.md is a derived summary of governed state, not a source of truth. The authoritative state remains in:
+
+- `ACTIVE_SLICE.md` — which slice is active
+- `NEXT_ACTION.md` — what action is authorized
+- `SLICE_STATUS.md` — where in the lifecycle
+- `.claude/docs/chains/[SLICE-ID].md` — governance pipeline state
+- `DECISION_LOG.md` — all decisions
+
+If chain-context.md conflicts with any of these files, the governed state file is authoritative. The `/resume` command validates this at every session start and pauses the chain on any inconsistency.
+
+---
+
+### §42.3 Chain Lifecycle
+
+1. **Chain start:** Principal initiates work (activates a slice, gives a task). At the end of the session — or when context reaches ~60% — Command executes `/handoff chain` to write chain-context.md and spawn a successor session.
+
+2. **Chain continuation:** Successor session boots via `/resume`. It reads chain-context.md, executes the full boot procedure (§31), validates continuity against governed state, executes the Next Action, continues governed work, and hands off when needed.
+
+3. **Chain pause:** If a review gate requires principal input, an escalation trigger fires (§14.4), or the chain encounters an unresolvable condition, Chain State is set to `PAUSED`. No successor is spawned. The principal must intervene.
+
+4. **Chain completion:** When the work queue is empty and the slice is closed (or no more work is authorized), Chain State is set to `COMPLETE`. No successor is spawned.
+
+```
+Principal → Start-AgentChain.ps1 -Task "..."
+    │
+    ▼
+Session 1: Boot → Work → /handoff chain (ACTIVE) → spawn
+    │
+    ▼
+Session 2: /resume → Boot → Validate → Work → /handoff chain (ACTIVE) → spawn
+    │
+    ▼
+Session N: /resume → Boot → Validate → Work → /handoff chain (COMPLETE) → stop
+    │
+    ▼
+Principal notified: chain complete
+```
+
+---
+
+### §42.4 Context Threshold
+
+Command should proactively hand off when context utilization reaches approximately **60%**. Since Claude Code does not expose a precise context meter, Command uses these heuristics:
+
+1. The session has processed **3+ full agent dispatch/review cycles**
+2. The session has been running for an extended period with **substantial tool output accumulation**
+3. Command notices **degradation in recall** of earlier session details
+4. The CLAUDE.md instruction to hand off at 60% context is itself the trigger — **when in doubt, hand off early rather than late**
+
+An early handoff costs one extra session. A late handoff risks context degradation that can corrupt the chain. The bias is always toward early handoff.
+
+---
+
+### §42.5 Boot Procedure Extension
+
+**When booting and `.claude/chain-context.md` exists with Chain State = `ACTIVE`:**
+
+Insert between boot steps 5b and 6: read `.claude/chain-context.md`, cross-validate against governed state:
+
+- Active Slice in chain-context.md must match `ACTIVE_SLICE.md`
+- Slice Status in chain-context.md must match `SLICE_STATUS.md`
+- Next Action in chain-context.md must be consistent with `NEXT_ACTION.md`
+
+If consistent: orient from chain context, execute Next Action after completing boot.
+If inconsistent: surface mismatch to principal, set Chain State to `PAUSED`.
+
+**When booting and `.claude/chain-context.md` does not exist or Chain State ≠ `ACTIVE`:**
+
+Standard boot procedure. No change.
+
+---
+
+### §42.6 Safety Model
+
+Session chaining uses `--dangerously-skip-permissions` to enable autonomous execution. Per-action permission prompts are removed. Safety is provided at the governance layer:
+
+| Risk | Mitigation |
+|------|-----------|
+| Destructive file operations | Scoped slice packets, Git as safety net |
+| Scope creep | Slice boundaries enforced by resume validation |
+| Ungoverned decisions | DECISION_LOG.md and audit-log.jsonl append-only audit |
+| Runaway execution | Review gates pause the chain; escalation triggers (§14.4) |
+| Context degradation | Fresh sessions with 60% proactive handoff |
+| State corruption | Resume validates chain-context against governed state |
+| Concurrent sessions | By design: current session exits after spawning successor |
+| Principal override | Human can pause chain at any time (set PAUSED or kill process) |
+
+Every session still executes the full boot procedure and all governance gates. The governance model is the safety net, not the permission system.
+
+---
+
+### §42.7 Audit Trail
+
+Each session handoff appends an entry to `audit-log.jsonl` with action type `session_handoff`. This extends the §40.4 action vocabulary:
+
+| Action | Meaning |
+|--------|---------|
+| `session_handoff` | Command handed off to a successor session via chain-context.md |
+
+**Entry format:**
+```json
+{
+  "timestamp": "[ISO-8601]",
+  "task_id": "[SLICE-ID or 'no-slice']",
+  "action": "session_handoff",
+  "actor": "command",
+  "target": "chain-context.md",
+  "detail": {
+    "session_count": "[N]",
+    "chain_state": "[ACTIVE|PAUSED|COMPLETE]",
+    "next_action": "[brief description]"
+  }
+}
+```
+
+This is an additive extension. Existing action types and entries are unchanged.
+
+---
+
+### §42.8 Manual Session Override
+
+If a human starts a session manually while `.claude/chain-context.md` shows Chain State = `ACTIVE`, Command surfaces the active chain during boot orientation (§31 step 8) and offers options:
+
+1. **Resume the chain:** Execute `/resume` to pick up where the chain left off
+2. **Pause the chain:** Command sets Chain State to `PAUSED` in chain-context.md, then proceeds with whatever the principal wants to do
+3. **Ignore the chain:** Proceed normally. chain-context.md remains `ACTIVE` but is not acted upon in this session
+
+The principal always has full authority. The chain serves the principal — the principal does not serve the chain.
+
+---
+
+### §42.9 Command File References
+
+Session chaining is implemented through two slash commands:
+
+| Command | Location | Purpose |
+|---------|----------|---------|
+| `/handoff` | `.claude/commands/handoff.md` | Unified handoff — manual mode (default) or chain mode (`/handoff chain`) |
+| `/resume` | `.claude/commands/resume.md` | Chain resume — reads chain-context.md, validates, continues execution |
+
+The PowerShell launcher at `Start-AgentChain.ps1` (project root) provides the initial entry point for starting or resuming a chain from outside Claude Code.

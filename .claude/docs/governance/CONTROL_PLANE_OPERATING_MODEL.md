@@ -11,7 +11,7 @@ purpose: Canonical specification of the control-plane operating model for Agent 
 **Established:** 2026-03-14
 **Baseline:** CTRL-S1 accepted file ownership and write rules preserved — no contract drift
 **Authority:** Command
-**Amended by:** CTRL-S5 — Dual-Surface Command Operating Model (added §13); CTRL-S6 — Command Reunification (revised §13 to single-surface model); B-2 — Session Boundary Protocol implementation (added §15)
+**Amended by:** CTRL-S5 — Dual-Surface Command Operating Model (added §13); CTRL-S6 — Command Reunification (revised §13 to single-surface model); B-2 — Session Boundary Protocol implementation (added §15); SC-1 — Session Chaining Infrastructure (added §17, updated §14.2)
 
 ---
 
@@ -542,7 +542,7 @@ The single-file Command identity structure is a simplification. No prior contrac
 
 ---
 
-*This document is authoritative for the control-plane operating model as established by CTRL-S2, amended by CTRL-S5, amended by CTRL-S6, amended by AS-2, amended by B-2, and amended by X3-0A (Express Lane Governance). CTRL-S1 accepted file ownership and write rules are preserved with no contract drift. CTRL-S6 revised §13 (Command Identity Model — single-surface reunification); AS-2 added §14 (A-Series Command Infrastructure); B-2 added §15 (Session Boundary Protocol); X3-0A added §16 (Express Lane Governance); no prior contracts beyond the surface model were altered.*
+*This document is authoritative for the control-plane operating model as established by CTRL-S2, amended by CTRL-S5, amended by CTRL-S6, amended by AS-2, amended by B-2, amended by X3-0A (Express Lane Governance), and amended by SC-1 (Session Chaining Infrastructure). CTRL-S1 accepted file ownership and write rules are preserved with no contract drift. CTRL-S6 revised §13 (Command Identity Model — single-surface reunification); AS-2 added §14 (A-Series Command Infrastructure); B-2 added §15 (Session Boundary Protocol); X3-0A added §16 (Express Lane Governance); SC-1 added §17 (Session Chaining Infrastructure) and updated §14.2 (command file registry); no prior contracts beyond the surface model were altered.*
 
 ---
 
@@ -616,6 +616,69 @@ Command may elevate an Express Lane slice to the full pipeline at any point duri
 
 ---
 
+## §17. Session Chaining Infrastructure
+
+**Established by:** SC-1
+**Authority:** Command
+
+### §17.1 Overview
+
+Session chaining enables autonomous execution across multiple Claude Code process invocations. It is a transport layer under governance — it does not alter any governance gate, file class, ownership rule, or authority boundary defined in this document.
+
+Session chaining adds a cross-session continuation mechanism to the existing intra-session protocols (§15 Session Boundary Protocol, §40 Autonomous Orchestration Protocol). The full specification is in COMMAND_ID.md §42.
+
+### §17.2 File Registration
+
+The following files are introduced by session chaining infrastructure:
+
+| Path | Class | Owner | Write Rule | Location |
+|------|-------|-------|------------|----------|
+| `.claude/chain-context.md` | `SESSION_COORDINATION` | Command | Overwrite | Project .claude root (NOT in docs/ops/) |
+| `.claude/commands/resume.md` | COMMAND_INFRASTRUCTURE | Created under Command authorization | Read-only post-creation; amendments require Command directive | Commands directory |
+| `Start-AgentChain.ps1` | OPERATIONAL_TOOLING | Command | Maintained by Command or Forge under authorization | Project root |
+
+**Note:** `.claude/chain-context.md` is NOT a control-plane state file. It is not listed in §2 File Inventory. It is a session coordination file that derives its content from governed state files. If chain-context.md conflicts with any file in the §2 inventory, the §2 file is authoritative.
+
+**Note:** `.claude/commands/handoff.md` (existing, amended) now supports two modes: manual (backward-compatible) and chain (autonomous session continuation). The amendment is registered in §14.2.
+
+### §17.3 SESSION_COORDINATION File Class
+
+`SESSION_COORDINATION` is a new file class introduced for session coordination files. It is distinct from the CLASS_A/CLASS_B system established in §3:
+
+- **Not authoritative:** Content is derived from governed state files, not independently authoritative
+- **Not a governance record:** Not subject to append-only or write-once rules
+- **Command-owned:** Only Command writes to SESSION_COORDINATION files
+- **Overwrite-permitted:** Entire file rewritten at each session handoff
+- **Validation target:** The `/resume` command validates SESSION_COORDINATION content against governed state before acting on it
+
+This class does not alter the CLASS_A/CLASS_B taxonomy. It exists alongside it for session-layer coordination.
+
+### §17.4 Audit Log Extension
+
+The `session_handoff` action type is added to the audit-log.jsonl action vocabulary (§40.4 / COMMAND_ID.md §42.7):
+
+| Action | Meaning |
+|--------|---------|
+| `session_handoff` | Command handed off to a successor session via chain-context.md |
+
+This is an additive extension. Existing action types and historical entries are unchanged.
+
+### §17.5 Governance Invariant
+
+Session chaining does NOT:
+
+- Alter any file class defined in §3
+- Change any ownership assignment in §4
+- Modify any write rule in §5
+- Bypass any review gate or escalation trigger (§14.4)
+- Create a new authority boundary (§6)
+- Modify the promotion flow (§7)
+- Change the slice lifecycle (§8/§9)
+
+Every session in a chain executes the complete boot procedure (COMMAND_ID.md §31) and operates under the full governance model defined in this document. Session chaining is infrastructure, not governance modification.
+
+---
+
 ## §14. A-Series Command Infrastructure
 
 **Established by:** AS-1 (Atlas architecture) / AS-2 (Forge implementation)
@@ -634,6 +697,7 @@ Command infrastructure files are markdown prompt templates invoked as slash comm
 | `.claude/commands/dispatch/` | `atlas.md`, `forge.md`, `sentinel.md`, `compass.md` | Agent dispatch commands |
 | `.claude/commands/review/` | `submission.md` | Command review protocol command |
 | `.claude/commands/govern/` | `activate-slice.md`, `close-slice.md`, `plan.md`, `express.md`, `init-project.md` | Slice governance commands |
+| `.claude/commands/` | `handoff.md` (amended), `resume.md` (new) | Session handoff (manual + chain) and chain resume commands |
 
 **Write authority:** Forge creates these files in AS-2 under Command authorization. Post-creation, amendments require a Command directive and are implemented by Forge as a governed slice. No agent modifies command files without Command authorization.
 

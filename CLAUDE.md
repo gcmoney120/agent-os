@@ -37,11 +37,23 @@ When a session is getting long or complex, proactively prepare session handoff b
 - Exact commands to resume
 - Any known bugs or build issues
 
-Use `/handoff` to generate standardized handoff instructions.
+Use `/handoff` to generate standardized manual handoff instructions.
+
+## Session Chaining
+
+- Use `/handoff chain` to write chain-context.md, update governed state, and spawn a successor session for autonomous continuation
+- Use `/resume` to continue from a chain handoff (reads chain-context.md, validates against governed state, executes Next Action)
+- Use `Start-AgentChain.ps1 -Task "..."` or `Start-AgentChain.ps1 -Resume` to launch chains from PowerShell
+- Hand off proactively at ~60% context utilization — an extra session is cheap, context degradation is not
+- chain-context.md is a coordination file, not a source of truth — governed state files (ACTIVE_SLICE.md, NEXT_ACTION.md, SLICE_STATUS.md) always win on conflict
+- Never spawn a successor session if Chain State is PAUSED or COMPLETE
+- Always execute the full boot procedure (COMMAND_ID.md §31) in chain continuation sessions — no shortcuts
+- Session chaining is a transport layer under governance — it does not bypass any governance gate, review requirement, or authority boundary
+- See COMMAND_ID.md §42 and CONTROL_PLANE_OPERATING_MODEL.md §17 for full specification
 
 ## Context Engineering
 
 - Keep the main session context lean — dispatch heavy work to sub-agents in fresh context windows
 - When dispatching agents, provide complete context in the dispatch prompt so the sub-agent doesn't need to re-read governance files
-- If context exceeds 60%, proactively create a handoff or dispatch remaining work to sub-agents
+- If context exceeds 60%, proactively create a handoff (`/handoff chain` for autonomous continuation, `/handoff` for manual) or dispatch remaining work to sub-agents
 - Prefer atomic commits per logical work unit over monolithic commits spanning 20+ files
