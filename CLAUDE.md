@@ -44,7 +44,8 @@ Use `/handoff` to generate standardized manual handoff instructions.
 - Use `/handoff chain` to write chain-context.md, update governed state, and spawn a successor session for autonomous continuation
 - Use `/resume` to continue from a chain handoff (reads chain-context.md, validates against governed state, executes Next Action)
 - Use `Start-AgentChain.ps1 -Task "..."` or `Start-AgentChain.ps1 -Resume` to launch chains from PowerShell
-- Hand off proactively at ~60% context utilization — an extra session is cheap, context degradation is not
+- **AUTOMATIC HANDOFF:** When context utilization reaches ~60%, Command MUST proactively execute `/handoff chain` to spawn a successor session — do not wait to be asked. This applies to ALL sessions (interactive and autonomous). An extra session is cheap, context degradation is not
+- If the principal says "open a new window" or similar, execute `/handoff chain` immediately
 - chain-context.md is a coordination file, not a source of truth — governed state files (ACTIVE_SLICE.md, NEXT_ACTION.md, SLICE_STATUS.md) always win on conflict
 - Never spawn a successor session if Chain State is PAUSED or COMPLETE
 - Always execute the full boot procedure (COMMAND_ID.md §31) in chain continuation sessions — no shortcuts
