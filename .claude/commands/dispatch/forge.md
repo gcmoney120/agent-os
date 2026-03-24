@@ -6,19 +6,22 @@ Your assigned task: $ARGUMENTS
 
 ## Boot Sequence
 
-Execute these reads in order. Do not begin implementation work until all reads are complete.
+Boot fast. Read critical files, confirm authorization, start work. Reference context files only when needed.
 
-1. Read `.claude/docs/agents/FORGE_ID.md` — your complete operating specification
-2. Read `.claude/docs/governance/CONTROL_PLANE_OPERATING_MODEL.md` — governance contracts you must preserve
-3. Read `.claude/docs/ops/SYSTEM_STATE.md` — current phase and completed slice history
-4. Read `.claude/docs/ops/CURRENT_FOCUS.md` — active slice context and constraints
-5. Read `.claude/docs/ops/OPEN_ISSUES.md` — execute the stale-content invalidation procedure before treating any CLASS A file as authoritative; if any check fails, STOP and surface the stale condition to Command before proceeding
-6. Read `.claude/docs/ops/ACTIVE_SLICE.md` — confirm the slice you are authorized to implement
-7. Read `.claude/docs/ops/ATLAS_LATEST.md` — the approved architecture; this is the authoritative implementation contract
-8. Read `.claude/docs/ops/COMMAND_DECISION.md` — most recent Command ruling; confirm you are authorized to begin implementation
-9. If a Chain Context Document exists for this slice at `.claude/docs/chains/[SLICE-ID].md`, read it — key decisions from Atlas and Command constrain your implementation
+### Critical Reads (mandatory — read before any work)
 
-If `COMMAND_DECISION.md` does not authorize Forge to act, STOP. Do not proceed until Command issues authorization.
+1. Read `.claude/docs/ops/ACTIVE_SLICE.md` — confirm the slice you are authorized to implement
+2. Read `.claude/docs/ops/COMMAND_DECISION.md` — confirm you are authorized to begin implementation. If not authorized, STOP.
+3. Read `.claude/docs/ops/ATLAS_LATEST.md` — the approved architecture; this is the authoritative implementation contract
+
+### Context Reads (on-demand — read when needed)
+
+4. Read `.claude/docs/agents/FORGE_ID.md` — your complete operating specification (read if this is your first dispatch in a session or if you need to verify constraints)
+5. Read `.claude/docs/ops/CURRENT_FOCUS.md` — active slice context and constraints (read if the task framing in $ARGUMENTS is insufficient)
+6. Read `.claude/docs/ops/OPEN_ISSUES.md` — execute the stale-content invalidation procedure if any CLASS A file content seems inconsistent; if any check fails, STOP and surface the stale condition to Command
+7. Read `.claude/docs/governance/CONTROL_PLANE_OPERATING_MODEL.md` — governance contracts (read if you encounter a governance boundary question)
+8. Read `.claude/docs/ops/SYSTEM_STATE.md` — current phase and history (read if you need historical context)
+9. If a Chain Context Document exists at `.claude/docs/chains/[SLICE-ID].md`, read it — key decisions from Atlas and Command constrain your implementation
 
 ---
 
@@ -84,6 +87,27 @@ Forge uses Figma MCP to extract design tokens, component specs, layout details, 
 
 ---
 
+## Atomic Commits (GSD Pattern)
+
+For slices modifying 5+ files, Forge should commit after each logical work unit rather than accumulating all changes into a single monolithic commit. This makes review easier, rollback targeted, and progress visible.
+
+### Commit Rules
+
+- Each commit must reference the slice ID: `[SLICE-ID] — [what this commit does]`
+- Each commit must map to one or more acceptance criteria
+- Each commit must pass `npx tsc --noEmit` before committing (no broken intermediate states)
+- The final commit in a slice should include a summary of all criteria addressed
+
+### Example
+
+```
+git commit -m "K2-A — add user profile API route (AC-1, AC-2)"
+git commit -m "K2-A — add profile page component (AC-3)"
+git commit -m "K2-A — add profile form validation (AC-4, AC-5)"
+```
+
+---
+
 ## Continuation Context (Segmented Tasks)
 
 If your assigned task (`$ARGUMENTS`) contains a `CONTINUATION CONTEXT:` block, this is a segmented task. Read the block in full before beginning any work.
@@ -108,19 +132,70 @@ This block is Command-authored only. Agents do not self-populate or modify it. I
 
 ---
 
-## Output Contract
+## Pre-Submission Verification (mandatory)
+
+Before writing PENDING_FORGE.md, Forge must pass ALL of the following checks. If any check fails, fix the issue before submitting. If the issue cannot be fixed, report it under RISKS FOR COMMAND with STATUS: BLOCKED.
 
 ### Build and Test Requirements
 
-Before submitting, Forge must:
-
-1. **Run tests** — if `agent-os.project.json` defines `execution.test_command`, run it and include results in the Step Report. If tests fail, either fix the issue or report it under RISKS FOR COMMAND.
-2. **Run build** — if `agent-os.project.json` defines `execution.build_command`, run it and verify no errors. Include build status in the Step Report.
-3. **Run lint** — if `agent-os.project.json` defines `execution.lint_command`, run it. Lint failures should be fixed before submission.
+1. **Type check** — run `npx tsc --noEmit` (or project-specific equivalent). Zero errors required. This catches type mismatches, missing enum values, nullable narrowing issues, and React hooks ordering problems before they compound.
+2. **Run build** — if `agent-os.project.json` defines `execution.build_command`, run it and verify no errors. Otherwise use `npm run build` if a `package.json` exists. Build must pass clean.
+3. **Run tests** — if `agent-os.project.json` defines `execution.test_command`, run it and include results in the Step Report. If tests fail, either fix the issue or report it under RISKS FOR COMMAND.
+4. **Run lint** — if `agent-os.project.json` defines `execution.lint_command`, run it. Lint failures should be fixed before submission.
 
 If the project adapter file does not exist or does not define these commands, Forge uses reasonable defaults (e.g., `npm test`, `npm run build`) if a `package.json` exists, or skips if not applicable.
 
-Test results, build status, and lint results must appear in the OUTPUT section of the Step Report.
+### Validation Consistency Check
+
+5. **Schema consistency** — grep for all Zod schemas and validation rules touched by this slice. Verify frontend and backend validation rules are consistent (e.g., password min lengths, required vs optional fields, enum values).
+6. **Nullable type guards** — verify all nullable types are properly guarded, especially for Vercel's stricter TypeScript narrowing which may differ from local `tsc`.
+
+### Incremental Verification During Implementation
+
+For slices modifying 5+ files: run `npx tsc --noEmit` after every 5 file edits. Fix errors immediately rather than accumulating them.
+
+Test results, build status, type check results, and lint results must appear in the OUTPUT section of the Step Report.
+
+---
+
+## Sub-Agent Decomposition (optional — for slices with 10+ files)
+
+When the Atlas architecture pack defines multiple independent work units touching non-overlapping files, Forge may decompose implementation into parallel sub-agents for faster execution. This is inspired by the GSD (Get Shit Done) wave-based task execution pattern.
+
+### When to Decompose
+
+- The architecture pack specifies 10+ files to create or modify
+- Work units can be identified that touch **non-overlapping files** (no two sub-agents write to the same file)
+- Each work unit maps to a clear subset of acceptance criteria
+
+### Decomposition Protocol
+
+1. **Read the Atlas architecture pack** and identify independent work units
+2. **Create a task decomposition** listing each unit with: scope, files, acceptance criteria subset, dependencies
+3. **Dispatch sub-agents** for independent units using the Agent tool:
+   - Each sub-agent receives: its file scope, acceptance criteria subset, and relevant architecture context
+   - Each sub-agent must run `npx tsc --noEmit` after completing its work
+   - Each sub-agent commits atomically with a message referencing the slice ID and the criteria it addresses
+4. **Collect results** from all sub-agents
+5. **Run full build verification** (`npx tsc --noEmit`, `npm run build`) across the assembled work
+6. **Assemble unified PENDING_FORGE.md** submission covering all work units
+
+### Sub-Agent Constraints
+
+- Sub-agents inherit Forge's operating constraints and scope constraints
+- Sub-agents may NOT write to PENDING_FORGE.md — only the main Forge thread writes the submission
+- Sub-agents may NOT expand scope beyond their assigned work unit
+- If a sub-agent encounters a conflict with another unit's scope, it STOPS and reports back to the main Forge thread
+- Maximum 5 parallel sub-agents per slice (to manage context and review complexity)
+
+### Atlas Task Decomposition Support
+
+When Atlas produces architecture packs for large slices, it SHOULD include a **Task Decomposition** section listing:
+- Independent work units with file assignments
+- Dependencies between units (which must complete before others can start)
+- Acceptance criteria mapping per unit
+
+This enables Forge to decompose without needing to re-analyze the architecture.
 
 ---
 

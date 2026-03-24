@@ -6,7 +6,7 @@ Task: $ARGUMENTS
 
 ## Express Lane Protocol
 
-Express Lane is a compressed governance path for Administrative-class slices. It replaces the full Atlas → Forge → Sentinel → Compass pipeline with a single-agent path: **Command → Forge → Command review → Close**.
+Express Lane is a compressed governance path for low-risk slices. It replaces the full Atlas → Forge → Sentinel → Compass pipeline with a faster path that preserves governance traceability while eliminating unnecessary ceremony.
 
 **Hard gate:** Express Lane is **PROHIBITED** when `trust_surfaces_involved === true`. If any trust surface is touched — directly or indirectly — this protocol must not be used. Elevate to the full pipeline via `/govern/activate-slice`.
 
@@ -14,14 +14,32 @@ Express Lane is a compressed governance path for Administrative-class slices. It
 
 ## Step 1 — Validate Express Eligibility
 
-Before proceeding, confirm ALL of the following:
+Before proceeding, confirm the slice fits ONE of the following Express-eligible governance classes:
 
+### Class A: Administrative (Express)
+Path: **Command → Forge → Command review → Close**
+Confirm ALL of the following:
 1. **Governance class is Administrative** — documentation, configuration, tooling, formatting, or similar low-risk work
 2. **No trust surfaces involved** — no identity, access control, audit, agreements, state machines, personal data, or security boundaries touched
 3. **No new architecture required** — the change is implementable against existing patterns or is self-contained
 4. **Scope is bounded** — the change can be fully described, implemented, and verified in a single Forge dispatch
 
-If ANY condition fails: STOP. Use `/govern/activate-slice` for the full pipeline instead. Do not proceed with Express Lane.
+### Class B: Implementation-Light (Express)
+Path: **Command → Forge → Command review → Close** (Sentinel/Compass optional at Command's discretion)
+Confirm ALL of the following:
+1. **No trust surfaces involved** — no identity, access control, audit, agreements, state machines, personal data, or security boundaries touched
+2. **No new architecture required** — the change uses existing patterns or is a scoped bug fix against known code
+3. **Scope is bounded** — fewer than 10 files modified, single subsystem, no schema changes
+4. **Category is one of:**
+   - **Scoped bug fix** — production or development bug with a clear, bounded fix
+   - **Low-risk implementation** — small feature addition or enhancement using existing patterns
+   - **Refactor** — code cleanup, rename, or restructuring with no behavioral change
+
+**When to add optional Sentinel/Compass:** Command should add Sentinel review if the fix touches code adjacent to trust surfaces, or Compass review if the change has testable acceptance criteria that benefit from independent validation. When added, dispatch them in parallel (see Phase 3.1 parallel review protocol).
+
+### Not Express-Eligible — Elevate
+
+If the slice does not fit Class A or Class B: STOP. Use `/govern/activate-slice` for the full pipeline instead. Do not proceed with Express Lane.
 
 ---
 
@@ -87,7 +105,7 @@ Execute the closure sequence:
 1. Write closure ruling to **COMMAND_DECISION.md**: ACCEPTED (Express Lane)
 2. Append to **SLICE_LEDGER.md** with Express Lane notation:
    ```
-   [ISO-8601] | [SLICE-ID] | Administrative (Express) | ACCEPTED | [summary] | Sentinel: N/A (Express) | Compass: N/A (Express)
+   [ISO-8601] | [SLICE-ID] | [Administrative/Implementation-Light] (Express) | ACCEPTED | [summary] | Sentinel: [N/A (Express) or ruling] | Compass: [N/A (Express) or ruling]
    ```
 3. Append milestone to **SYSTEM_STATE.md** (milestone history section)
 4. Update governance state files:

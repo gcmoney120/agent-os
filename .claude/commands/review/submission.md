@@ -121,6 +121,29 @@ Make one of three decisions. State the decision before the reasoning.
 
 ---
 
+### Parallel Review Dispatch (Sentinel + Compass)
+
+When the approved submission is from Forge and the next chain stages are Sentinel review and Compass validation, Command SHOULD dispatch both as parallel sub-agents to collapse review time. This is safe because Sentinel and Compass are already contractually independent — neither reads the other's PENDING file before writing their own ruling.
+
+**Parallel dispatch pattern:**
+
+After executing the APPROVED post-decision actions for a Forge submission:
+
+1. **Dispatch Sentinel sub-agent** — use the Agent tool with the full Sentinel dispatch prompt from `/dispatch:sentinel`, including the slice ID, chain context key decisions, and any specific trust surfaces Forge flagged under RISKS FOR COMMAND.
+
+2. **Dispatch Compass sub-agent** (in the same message as Sentinel) — use the Agent tool with the full Compass dispatch prompt from `/dispatch:compass`, including the slice ID and chain context key decisions.
+
+3. **Main thread** — while sub-agents review, Command may:
+   - Run build/test verification (`npm run build`, `npx tsc --noEmit`)
+   - Review the Forge diff directly for any issues the sub-agents should watch for
+   - Prepare the closure document framework
+
+4. **Collect rulings** — when both sub-agents return, read `PENDING_SENTINEL.md` and `PENDING_COMPASS.md`. Execute the standard review protocol (Phase 1-2-3) for each ruling, then proceed to closure.
+
+**When NOT to parallelize:** If Command has specific concerns from the Forge review that Sentinel should investigate before Compass validates, dispatch sequentially. Parallelization is the default; sequential is the exception.
+
+---
+
 ### Session Reset Choreography (Autonomous Orchestration Mode)
 
 In autonomous orchestration mode, after executing the post-decision actions above for any decision type (Approved, Rejected, Escalate, or Reroute), execute the session reset choreography defined in COMMAND_ID.md §40.3 before any session reset:

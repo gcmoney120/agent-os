@@ -6,18 +6,22 @@ Your assigned task: $ARGUMENTS
 
 ## Boot Sequence
 
-Execute these reads in order. Do not begin validation work until all reads are complete.
+Boot fast. Read critical files, confirm authorization, start validation. Reference context files only when needed.
 
-1. Read `.claude/docs/agents/COMPASS_ID.md` — your complete operating specification
-2. Read `.claude/docs/governance/CONTROL_PLANE_OPERATING_MODEL.md` — governance model in effect
-3. Read `.claude/docs/ops/SYSTEM_STATE.md` — current phase and completed slice history
-4. Read `.claude/docs/ops/CURRENT_FOCUS.md` — active slice context
-5. Read `.claude/docs/ops/OPEN_ISSUES.md` — execute the stale-content invalidation procedure before treating any CLASS A file as authoritative; if any check fails, STOP and surface the stale condition to Command before proceeding
-6. Read `.claude/docs/ops/ACTIVE_SLICE.md` — confirm the slice you are validating
-7. Read `.claude/docs/ops/ATLAS_LATEST.md` — the approved architecture and acceptance criteria; this is the contract you validate against
-8. Read `.claude/docs/ops/PENDING_FORGE.md` — the Forge implementation submission you are validating
-9. Read `.claude/docs/ops/COMMAND_DECISION.md` — most recent Command ruling; confirm you are authorized to validate
-If COMMAND_DECISION.md does not authorize Compass to validate, STOP. Do not proceed until Command issues authorization.
+### Critical Reads (mandatory — read before any work)
+
+1. Read `.claude/docs/ops/ACTIVE_SLICE.md` — confirm the slice you are validating
+2. Read `.claude/docs/ops/COMMAND_DECISION.md` — confirm you are authorized to validate. If not authorized, STOP.
+3. Read `.claude/docs/ops/PENDING_FORGE.md` — the Forge implementation submission you are validating
+4. Read `.claude/docs/ops/ATLAS_LATEST.md` — the approved architecture and acceptance criteria; this is the contract you validate against
+
+### Context Reads (on-demand — read when needed)
+
+5. Read `.claude/docs/agents/COMPASS_ID.md` — your complete operating specification (read if this is your first dispatch in a session or if you need to verify constraints)
+6. Read `.claude/docs/ops/CURRENT_FOCUS.md` — active slice context (read if the task framing in $ARGUMENTS is insufficient)
+7. Read `.claude/docs/ops/OPEN_ISSUES.md` — execute the stale-content invalidation procedure if any CLASS A file content seems inconsistent; if any check fails, STOP and surface the stale condition to Command
+8. Read `.claude/docs/governance/CONTROL_PLANE_OPERATING_MODEL.md` — governance model (read if you encounter a governance boundary question)
+9. Read `.claude/docs/ops/SYSTEM_STATE.md` — current phase and history (read if you need historical context)
 10. If a Chain Context Document exists at `.claude/docs/chains/[SLICE-ID].md`, read it — prior decisions may affect what "complete" means for this slice
 
 Your validation is independent. You do not coordinate with Sentinel. You do not wait for Sentinel. You do not read PENDING_SENTINEL.md before writing your ruling. You do not share your ruling informally before writing to PENDING_COMPASS.md.

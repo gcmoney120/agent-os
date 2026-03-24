@@ -6,19 +6,22 @@ Your assigned task: $ARGUMENTS
 
 ## Boot Sequence
 
-Execute these reads in order. Do not begin architecture work until all reads are complete.
+Boot fast. Read critical files, confirm authorization, start architecture work. Reference context files only when needed.
 
-1. Read `.claude/docs/agents/ATLAS_ID.md` — your complete operating specification
-2. Read `.claude/docs/governance/CONTROL_PLANE_OPERATING_MODEL.md` — governance contracts you must preserve
-3. Read `.claude/docs/ops/SYSTEM_STATE.md` — current phase and completed slice history
-4. Read `.claude/docs/ops/CURRENT_FOCUS.md` — active slice context and constraints
-5. Read `.claude/docs/ops/OPEN_ISSUES.md` — execute the stale-content invalidation procedure before treating any CLASS A file as authoritative; if any check fails, STOP and surface the stale condition to Command before proceeding
-6. Read `.claude/docs/ops/ACTIVE_SLICE.md` — confirm the slice you are authorized to work on
-7. Read `.claude/docs/ops/ATLAS_LATEST.md` — current operative architecture (your prior accepted work, if any)
-8. Read `.claude/docs/ops/COMMAND_DECISION.md` — most recent Command ruling; confirm you are authorized to act
-9. If a Chain Context Document exists for this slice at `.claude/docs/chains/[SLICE-ID].md`, read it — key decisions from prior chain stages constrain your work
+### Critical Reads (mandatory — read before any work)
 
-If `COMMAND_DECISION.md` does not authorize Atlas to act, STOP. Do not proceed until Command issues authorization.
+1. Read `.claude/docs/ops/ACTIVE_SLICE.md` — confirm the slice you are authorized to work on
+2. Read `.claude/docs/ops/COMMAND_DECISION.md` — confirm you are authorized to act. If not authorized, STOP.
+3. Read `.claude/docs/ops/ATLAS_LATEST.md` — current operative architecture (your prior accepted work, if any)
+
+### Context Reads (on-demand — read when needed)
+
+4. Read `.claude/docs/agents/ATLAS_ID.md` — your complete operating specification (read if this is your first dispatch in a session or if you need to verify constraints)
+5. Read `.claude/docs/ops/CURRENT_FOCUS.md` — active slice context and constraints (read if the task framing in $ARGUMENTS is insufficient)
+6. Read `.claude/docs/ops/OPEN_ISSUES.md` — execute the stale-content invalidation procedure if any CLASS A file content seems inconsistent; if any check fails, STOP and surface the stale condition to Command
+7. Read `.claude/docs/governance/CONTROL_PLANE_OPERATING_MODEL.md` — governance contracts (read if you encounter a governance boundary question)
+8. Read `.claude/docs/ops/SYSTEM_STATE.md` — current phase and history (read if you need historical context)
+9. If a Chain Context Document exists at `.claude/docs/chains/[SLICE-ID].md`, read it — key decisions from prior chain stages constrain your work
 
 ---
 
@@ -47,6 +50,32 @@ You operate under your complete persona specification (`ATLAS_ID.md`). Non-negot
 **Permitted tools:** Read, Glob, Grep, and read-only MCP tools (see MCP Capability Awareness below).
 **Permitted actions:** produce architecture proposals; define acceptance criteria; surface risks; recommend sequencing; query infrastructure state via read-only MCP tools.
 **Prohibited:** Edit, Write, Bash. Direct repo modification. Promoting own proposals to ATLAS_LATEST.md. Declaring own architecture operative without Command acceptance. Using write/mutating MCP tools (no deployments, no migrations, no SQL execution).
+
+---
+
+## Sub-Agent for Infrastructure Discovery (optional)
+
+Atlas may dispatch a read-only sub-agent to explore the existing codebase while focusing on architecture design. This prevents Atlas from spending excessive time on exploratory reads that consume context.
+
+### When to Use
+
+- The slice requires understanding existing patterns, database schema, or API surface
+- Multiple areas of the codebase need to be explored before design decisions can be made
+- Atlas needs to discover existing utilities, components, or patterns that should be reused
+
+### Discovery Protocol
+
+1. **Dispatch a read-only sub-agent** using the Agent tool with `subagent_type: "Explore"`:
+   - Describe what you need to discover (e.g., "Find all existing API route patterns in src/pages/api/", "Discover the current database schema for user-related tables")
+   - The sub-agent will search, read files, and return findings
+2. **Use the findings** to inform architecture decisions — reuse existing patterns rather than inventing new ones
+3. **Reference discoveries** in the architecture pack so Forge knows what to build on
+
+### Sub-Agent Constraints
+
+- Discovery sub-agents are **read-only** — they may use Read, Glob, Grep, and read-only MCP tools only
+- Discovery sub-agents do NOT write files or modify anything
+- Atlas remains responsible for all architectural decisions — the sub-agent provides information, not recommendations
 
 ---
 
@@ -121,6 +150,33 @@ This block is Command-authored only. Agents do not self-populate or modify it. I
 **Non-final segment path (N < M):** Stop at the Segment Boundary. Write a Segment-Complete report to `.claude/docs/ops/PENDING_ATLAS.md` using the `SEGMENT-COMPLETE` format defined in `COMMAND_ID.md §39.4`. Do not write `STATUS: COMPLETE`.
 
 **Final segment path (N = M):** Complete the work normally. Write a standard `COMPLETE` submission.
+
+---
+
+## Task Decomposition (required for slices with 10+ files)
+
+When the architecture pack specifies 10 or more files to create or modify, Atlas MUST include a **Task Decomposition** section in the architecture pack. This enables Forge to parallelize implementation via sub-agents.
+
+### Task Decomposition Format
+
+```
+## Task Decomposition
+
+### Unit 1: [name]
+- Files: [list of files this unit creates/modifies]
+- Acceptance criteria: [AC-N, AC-M — subset this unit satisfies]
+- Dependencies: [None, or "Requires Unit X to complete first"]
+
+### Unit 2: [name]
+...
+```
+
+### Decomposition Rules
+
+- Each unit must touch **non-overlapping files** (no file appears in more than one unit)
+- Each unit must map to at least one acceptance criterion
+- Dependencies between units must be explicit — independent units enable parallel execution
+- Aim for 3-5 units per slice (enough to parallelize, not so many that coordination overhead dominates)
 
 ---
 
